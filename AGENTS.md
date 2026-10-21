@@ -77,6 +77,12 @@ Preserve `@lid` addressing end to end. Never strip a JID with `split('@')[0]` (o
 outbound target — that turns a `@lid` into a bogus phone number and the message goes nowhere or to the wrong
 user. Normalize only through the existing JID helpers. Detail: skill `purple-baileys`.
 
+### (e) No code comments
+
+Code must be self-declarative: never add comments to source code. Express intent through names — extract
+a well-named function, constant or variable instead of explaining a line. Rationale belongs in the commit
+body and the PR description. Existing upstream comments may stay; do not add new ones.
+
 ## Skills per task
 
 Read the matching skill BEFORE writing code. Skills live in `.claude/skills/<name>/SKILL.md`.
@@ -194,7 +200,7 @@ this.router.post(this.routerPath('create'), ...guards, async (req, res) => {
 - Files `feature.kind.ts` (e.g. `whatsapp.baileys.service.ts`); classes `PascalCase`, functions/variables
   `camelCase`, constants `UPPER_SNAKE_CASE`.
 - Logging via the project `Logger` (Pino); never log API keys or tokens.
-- Code, comments, API responses and docs in English.
+- Code, API responses and docs in English. No code comments (hard rule (e)).
 
 ### Environment
 
