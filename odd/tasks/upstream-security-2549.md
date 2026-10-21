@@ -35,9 +35,9 @@ In `dataValidate`: merge the body only when the matched route is exactly
 
 ## Checklist
 
-- [ ] T1 RED: reproduce attacks 1-3 on a local server before the patch
-- [ ] T2 Patch `abstract.router.ts` + check `instanceId` consumers (chatbots, S3)
-- [ ] T3 GREEN: attacks 1-3 blocked, cases 4-6 unchanged; tsc, build, lint
+- [x] T1 RED: reproduce attacks 1-3 on a local server before the patch
+- [x] T2 Patch `abstract.router.ts` + check `instanceId` consumers (chatbots, S3)
+- [x] T3 GREEN: attacks 1-3 blocked, cases 4-6 unchanged; tsc, build, lint
 
 ## Test plan (local, G = global key, instances A/B with tokens TA/TB)
 
@@ -52,8 +52,25 @@ In `dataValidate`: merge the body only when the matched route is exactly
 
 - Websocket: any instance token is accepted and `sendNode` targets any
   `data.instanceId` without ownership check (`websocket.controller.ts:41-49,81-83`). High priority, separate feature.
-- `instance.guard.ts:26` also uses `originalUrl.includes('/instance/create')`.
+- `instance.guard.ts:26,43` also uses `originalUrl.includes('/instance/create')`.
+- S3 `getMedia` (`s3.service.ts:14-17`) filters by `instance.instanceId`, which is never set
+  on HTTP routes → unfiltered query across instances when S3 is enabled. Pre-existing.
 
 ## Evidence
 
-(commit ids and verification output per task)
+Local server (Postgres 15, Redis 7, port 8089), probe script outside the repo.
+
+| Case | Before patch (RED) | After patch (GREEN) |
+|---|---|---|
+| 1 `connectionState/A?instanceName=B` (TA) | `instanceName: B` — **bypass** | `instanceName: A` |
+| 3 `webhook/find/A?instanceName=B` (TA) | B's webhook — **bypass** | A's webhook |
+| 2 `webhook/set/A?x=/instance/create` body `instanceName: B` (TA) | 403 "name B already in use" (blocked by `instanceLoggedGuard`, not exploitable) | same 403 |
+| 7 `webhook/find/A?instanceId=<B>` (TA) | A's webhook (route keys by name) | A's webhook |
+| 4 create C (G) | 201 | 201 |
+| 5 `fetchInstances?instanceName=A` (G) | A | A |
+| 6 `fetchInstances?instanceName=B` (TA) | 401 | 401 |
+
+`tsc --noEmit` OK, `npm run build` OK, eslint on the changed file OK.
+Static finding refuted by the run: the spoofed `?x=/instance/create` body path is
+already rejected by `instance.guard.ts` (it also uses `originalUrl.includes`, which
+wrongly 403s such requests — harmless, follow-up).

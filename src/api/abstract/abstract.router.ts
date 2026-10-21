@@ -32,13 +32,21 @@ export abstract class RouterBroker {
     const ref = new ClassRef();
     const body = request.body;
     const instance = request.params as unknown as InstanceDto;
+    // The auth guard authorized this path param; query/body must never retarget another instance.
+    const boundInstanceName = request.params?.instanceName;
 
     if (request?.query && Object.keys(request.query).length > 0) {
       Object.assign(instance, request.query);
     }
 
-    if (request.originalUrl.includes('/instance/create')) {
+    // Match the route itself: originalUrl includes the query string and can be spoofed.
+    if (request.baseUrl === '/instance' && request.route?.path === '/create') {
       Object.assign(instance, body);
+    }
+
+    if (boundInstanceName) {
+      instance.instanceName = boundInstanceName;
+      delete instance.instanceId;
     }
 
     Object.assign(ref, body);
