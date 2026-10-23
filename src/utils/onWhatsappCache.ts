@@ -14,12 +14,10 @@ function getAvailableNumbers(remoteJid: string) {
 
   const [number, domain = 's.whatsapp.net'] = remoteJid.split('@');
 
-  // TODO: Se já for @lid, retornar apenas ele mesmo SEM adicionar @domain novamente
   if (domain === 'lid' || domain === 'g.us') {
-    return [remoteJid]; // Retorna direto para @lid e @g.us
+    return [remoteJid];
   }
 
-  // Brazilian numbers
   if (remoteJid.startsWith('55')) {
     const numberWithDigit =
       number.slice(4, 5) === '9' && number.length === 13 ? number : `${number.slice(0, 4)}9${number.slice(4)}`;
@@ -27,11 +25,7 @@ function getAvailableNumbers(remoteJid: string) {
 
     numbersAvailable.push(numberWithDigit);
     numbersAvailable.push(numberWithoutDigit);
-  }
-
-  // Mexican/Argentina numbers
-  // Ref: https://faq.whatsapp.com/1294841057948784
-  else if (number.startsWith('52') || number.startsWith('54')) {
+  } else if (number.startsWith('52') || number.startsWith('54')) {
     let prefix = '';
     if (number.startsWith('52')) {
       prefix = '1';
@@ -48,14 +42,10 @@ function getAvailableNumbers(remoteJid: string) {
 
     numbersAvailable.push(numberWithDigit);
     numbersAvailable.push(numberWithoutDigit);
-  }
-
-  // Other countries
-  else {
+  } else {
     numbersAvailable.push(number);
   }
 
-  // TODO: Adiciona @domain apenas para números que não são @lid
   return numbersAvailable.map((number) => `${number}@${domain}`);
 }
 
@@ -65,117 +55,109 @@ interface ISaveOnWhatsappCacheParams {
   lid?: 'lid' | undefined;
 }
 
+interface CacheGroup {
+  remoteJid: string;
+  jids: Set<string>;
+  lid: string | null;
+}
+
+interface NormalizedItem {
+  remoteJid: string;
+  jids: string[];
+  lid: string | null;
+}
+
+const SAVE_CHUNK_SIZE = 500;
+
 function normalizeJid(jid: string | null | undefined): string | null {
   if (!jid) return null;
   return jid.startsWith('+') ? jid.slice(1) : jid;
 }
 
-async function saveOnWhatsappCacheItem(item: ISaveOnWhatsappCacheParams) {
-  const remoteJid = normalizeJid(item.remoteJid);
+function normalizeItem(item: ISaveOnWhatsappCacheParams | undefined): NormalizedItem | null {
+  const remoteJid = normalizeJid(item?.remoteJid);
   if (!remoteJid) {
     logger.warn('[saveOnWhatsappCache] Item skipped, missing remoteJid.');
-    return;
+    return null;
   }
 
-  const altJidNormalized = normalizeJid(item.remoteJidAlt);
-  const lidAltJid = altJidNormalized && altJidNormalized.includes('@lid') ? altJidNormalized : null;
+  const altJid = normalizeJid(item.remoteJidAlt);
+  const baseJids = altJid && altJid.includes('@lid') ? [remoteJid, altJid] : [remoteJid];
 
-  const baseJids = [remoteJid]; // Garante que o remoteJid esteja na lista inicial
-  if (lidAltJid) {
-    baseJids.push(lidAltJid);
-  }
-
-  const expandedJids = baseJids.flatMap((jid) => getAvailableNumbers(jid));
-
-  // 1. Busca entrada por jidOptions e também remoteJid
-  // Às vezes acontece do remoteJid atual NÃO ESTAR no jidOptions ainda, ocasionando o erro:
-  // 'Unique constraint failed on the fields: (`remoteJid`)'
-  // Isso acontece principalmente em grupos que possuem o número do criador no ID (ex.: '559911223345-1234567890@g.us')
-  const existingRecord = await prismaRepository.isOnWhatsapp.findFirst({
-    where: {
-      OR: [
-        ...expandedJids.map((jid) => ({ jidOptions: { contains: jid } })),
-        { remoteJid: remoteJid }, // TODO: Descobrir o motivo que causa o remoteJid não estar (às vezes) incluso na lista de jidOptions
-      ],
-    },
-  });
-
-  logger.verbose(
-    `[saveOnWhatsappCache] Register exists for [${expandedJids.join(',')}]? => ${existingRecord ? existingRecord.remoteJid : 'Not found'}`,
-  );
-
-  // 2. Unifica todos os JIDs usando um Set para garantir valores únicos
-  const finalJidOptions = new Set(expandedJids);
-
-  if (lidAltJid) {
-    finalJidOptions.add(lidAltJid);
-  }
-
-  if (existingRecord?.jidOptions) {
-    existingRecord.jidOptions.split(',').forEach((jid) => finalJidOptions.add(jid));
-  }
-
-  // 3. Prepara o payload final
-  // Ordena os JIDs para garantir consistência na string final
-  const sortedJidOptions = [...finalJidOptions].sort();
-  const newJidOptionsString = sortedJidOptions.join(',');
-  const newLid = item.lid === 'lid' || item.remoteJid?.includes('@lid') ? 'lid' : null;
-
-  const dataPayload = {
-    remoteJid: remoteJid,
-    jidOptions: newJidOptionsString,
-    lid: newLid,
+  return {
+    remoteJid,
+    jids: [...new Set(baseJids.flatMap((jid) => getAvailableNumbers(jid)))],
+    lid: item.lid === 'lid' || item.remoteJid.includes('@lid') ? 'lid' : null,
   };
-
-  // 4. Decide entre Criar ou Atualizar
-  if (existingRecord) {
-    // Compara a string de JIDs ordenada existente com a nova
-    const existingJidOptionsString = existingRecord.jidOptions
-      ? existingRecord.jidOptions.split(',').sort().join(',')
-      : '';
-
-    const isDataSame =
-      existingRecord.remoteJid === dataPayload.remoteJid &&
-      existingJidOptionsString === dataPayload.jidOptions &&
-      existingRecord.lid === dataPayload.lid;
-
-    if (isDataSame) {
-      logger.verbose(`[saveOnWhatsappCache] Data for ${remoteJid} is already up-to-date. Skipping update.`);
-      return; // Pula para o próximo item
-    }
-
-    // Os dados são diferentes, então atualiza
-    logger.verbose(
-      `[saveOnWhatsappCache] Register exists, updating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}, lid=${dataPayload.lid}`,
-    );
-    await prismaRepository.isOnWhatsapp.update({
-      where: { id: existingRecord.id },
-      data: dataPayload,
-    });
-  } else {
-    // Cria nova entrada
-    logger.verbose(
-      `[saveOnWhatsappCache] Register does not exist, creating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}, lid=${dataPayload.lid}`,
-    );
-    await prismaRepository.isOnWhatsapp.create({
-      data: dataPayload,
-    });
-  }
 }
 
-const SAVE_CONCURRENCY = 10;
+async function loadExistingGroups(jids: string[]) {
+  const groups = new Map<string, CacheGroup>();
+  const hits = await prismaRepository.isOnWhatsappJid.findMany({ where: { jid: { in: jids } } });
+  const canonicals = [...new Set(hits.map((row) => row.remoteJid))];
+  if (canonicals.length === 0) return groups;
 
-const isUniqueConstraintError = (error: unknown) => (error as { code?: string })?.code === 'P2002';
-
-async function saveOnWhatsappCacheItemWithRetry(item: ISaveOnWhatsappCacheParams) {
-  try {
-    await saveOnWhatsappCacheItem(item);
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) {
-      throw error;
-    }
-    await saveOnWhatsappCacheItem(item);
+  const rows = await prismaRepository.isOnWhatsappJid.findMany({ where: { remoteJid: { in: canonicals } } });
+  for (const row of [...hits, ...rows]) {
+    const group = groups.get(row.remoteJid) ?? { remoteJid: row.remoteJid, jids: new Set<string>(), lid: null };
+    group.jids.add(row.jid);
+    group.lid = group.lid ?? row.lid ?? null;
+    groups.set(row.remoteJid, group);
   }
+  return groups;
+}
+
+function mergeGroups(items: NormalizedItem[], existing: Map<string, CacheGroup>) {
+  const existingByJid = new Map<string, CacheGroup>();
+  existing.forEach((group) => group.jids.forEach((jid) => existingByJid.set(jid, group)));
+
+  const builtByJid = new Map<string, CacheGroup>();
+  for (const item of items) {
+    const group: CacheGroup = { remoteJid: item.remoteJid, jids: new Set(item.jids), lid: item.lid };
+
+    for (const jid of item.jids) {
+      const found = existingByJid.get(jid);
+      if (!found) continue;
+      found.jids.forEach((existingJid) => group.jids.add(existingJid));
+      group.lid = group.lid ?? found.lid;
+    }
+
+    const previous = new Set([...group.jids].map((jid) => builtByJid.get(jid)).filter(Boolean));
+    for (const earlier of previous) {
+      earlier.jids.forEach((jid) => group.jids.add(jid));
+      group.lid = group.lid ?? earlier.lid;
+    }
+
+    group.jids.forEach((jid) => builtByJid.set(jid, group));
+  }
+
+  return new Set(builtByJid.values());
+}
+
+async function saveChunk(items: NormalizedItem[]) {
+  const variants = [...new Set(items.flatMap((item) => item.jids))];
+  const groups = mergeGroups(items, await loadExistingGroups(variants));
+
+  const rows = new Map<string, { jid: string; remoteJid: string; lid: string | null }>();
+  groups.forEach((group) =>
+    group.jids.forEach((jid) => rows.set(jid, { jid, remoteJid: group.remoteJid, lid: group.lid })),
+  );
+  const jids = [...rows.keys()];
+
+  logger.verbose(`[saveOnWhatsappCache] Saving ${jids.length} jids in ${groups.size} groups`);
+
+  await prismaRepository.$transaction([
+    prismaRepository.isOnWhatsappJid.deleteMany({ where: { jid: { in: jids } } }),
+    prismaRepository.isOnWhatsappJid.createMany({ data: [...rows.values()] }),
+  ]);
+}
+
+const writeQueue: { tail: Promise<unknown> } = { tail: Promise.resolve() };
+
+function enqueueWrite<T>(write: () => Promise<T>): Promise<T> {
+  const run = writeQueue.tail.then(write);
+  writeQueue.tail = run.catch(() => undefined);
+  return run;
 }
 
 export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
@@ -183,48 +165,79 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
     return;
   }
 
-  const items = data.values();
-  const worker = async () => {
-    for (const item of items) {
-      try {
-        await saveOnWhatsappCacheItemWithRetry(item);
-      } catch (e) {
-        logger.error(`[saveOnWhatsappCache] Error processing item for ${item?.remoteJid}: `);
-        logger.error(e);
-      }
-    }
-  };
+  const items = data.map(normalizeItem).filter((item): item is NormalizedItem => item !== null);
+  await enqueueWrite(() => saveItems(items));
+}
 
-  await Promise.all(Array.from({ length: Math.min(SAVE_CONCURRENCY, data.length) }, worker));
+async function saveChunkWithRetry(chunk: NormalizedItem[]) {
+  try {
+    await saveChunk(chunk);
+  } catch (error) {
+    if ((error as { code?: string })?.code !== 'P2002') throw error;
+    await saveChunk(chunk);
+  }
+}
+
+async function saveItems(items: NormalizedItem[]) {
+  const chunks = Array.from({ length: Math.ceil(items.length / SAVE_CHUNK_SIZE) }, (_, index) =>
+    items.slice(index * SAVE_CHUNK_SIZE, (index + 1) * SAVE_CHUNK_SIZE),
+  );
+
+  for (const [index, chunk] of chunks.entries()) {
+    try {
+      await saveChunkWithRetry(chunk);
+    } catch (error) {
+      logger.error(`[saveOnWhatsappCache] Error saving chunk starting at item ${index * SAVE_CHUNK_SIZE}: `);
+      logger.error(error);
+    }
+  }
 }
 
 export async function getOnWhatsappCache(remoteJids: string[]) {
-  let results: {
+  const results: {
     remoteJid: string;
     number: string;
     jidOptions: string[];
     lid?: string;
   }[] = [];
 
-  if (configService.get<Database>('DATABASE').SAVE_DATA.IS_ON_WHATSAPP) {
-    const remoteJidsWithoutPlus = remoteJids.map((remoteJid) => getAvailableNumbers(remoteJid)).flat();
-
-    const onWhatsappCache = await prismaRepository.isOnWhatsapp.findMany({
-      where: {
-        OR: remoteJidsWithoutPlus.map((remoteJid) => ({ jidOptions: { contains: remoteJid } })),
-        updatedAt: {
-          gte: dayjs().subtract(configService.get<Database>('DATABASE').SAVE_DATA.IS_ON_WHATSAPP_DAYS, 'days').toDate(),
-        },
-      },
-    });
-
-    results = onWhatsappCache.map((item) => ({
-      remoteJid: item.remoteJid,
-      number: item.remoteJid.split('@')[0],
-      jidOptions: item.jidOptions.split(','),
-      lid: item.lid,
-    }));
+  if (!configService.get<Database>('DATABASE').SAVE_DATA.IS_ON_WHATSAPP) {
+    return results;
   }
+
+  const cutoff = dayjs()
+    .subtract(configService.get<Database>('DATABASE').SAVE_DATA.IS_ON_WHATSAPP_DAYS, 'days')
+    .toDate();
+  const variants = [...new Set(remoteJids.flatMap((remoteJid) => getAvailableNumbers(remoteJid)))];
+
+  const hits = await prismaRepository.isOnWhatsappJid.findMany({
+    where: { jid: { in: variants }, updatedAt: { gte: cutoff } },
+  });
+  const canonicals = [...new Set(hits.map((row) => row.remoteJid))];
+  if (canonicals.length === 0) {
+    return results;
+  }
+
+  const rows = await prismaRepository.isOnWhatsappJid.findMany({
+    where: { remoteJid: { in: canonicals }, updatedAt: { gte: cutoff } },
+  });
+
+  const groups = new Map<string, { jids: Set<string>; lid?: string }>();
+  for (const row of rows) {
+    const group = groups.get(row.remoteJid) ?? { jids: new Set<string>() };
+    group.jids.add(row.jid);
+    group.lid = group.lid ?? row.lid ?? undefined;
+    groups.set(row.remoteJid, group);
+  }
+
+  groups.forEach((group, remoteJid) =>
+    results.push({
+      remoteJid,
+      number: remoteJid.split('@')[0],
+      jidOptions: [...group.jids].sort(),
+      lid: group.lid,
+    }),
+  );
 
   return results;
 }
