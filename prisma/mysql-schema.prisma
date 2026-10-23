@@ -659,6 +659,15 @@ model IsOnWhatsapp {
   updatedAt  DateTime @updatedAt @db.Timestamp
 }
 
+model IsOnWhatsappJid {
+  jid       String   @id @db.VarChar(100)
+  remoteJid String   @db.VarChar(100)
+  lid       String?  @db.VarChar(100)
+  updatedAt DateTime @updatedAt @db.Timestamp
+
+  @@index([remoteJid])
+}
+
 model N8n {
   id              String           @id @default(cuid())
   enabled         Boolean          @default(true) @db.TinyInt()
