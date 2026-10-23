@@ -1,5 +1,28 @@
 # evolution-in-purple
 
+## 0.1.2 (2026-10-23)
+
+### Features
+
+* **onWhatsapp cache storage**: the cache moves to a new `IsOnWhatsappJid` table with one row per jid and an indexed canonical `remoteJid`. Lookups are two indexed queries and a 2,500-contact sync takes about 30 queries instead of ~5,000; writes are serialized per process. The migration is additive (the old `IsOnWhatsapp` table is kept, so an upstream image still runs) and backfills Postgres from `jidOptions` (#22)
+
+### Fixes
+
+* **Database pool exhaustion**: contact syncs no longer open thousands of concurrent onWhatsapp cache queries (#16)
+* **Status updates without `remoteJid`**: `messages.update` takes the jid from the stored message, so the webhook carries it and `messageUpdate.create` no longer fails and aborts the batch (#17)
+* **Group number changes**: plain-jid `messageStubParameters` no longer throw in `processMessage`, so `group-participants.update` is emitted (#18; Baileys patch)
+* **Link previews without an image**: pages without an image get a title and description preview instead of none (#19; Baileys patch)
+* **Telemetry**: disabled unless `TELEMETRY_ENABLED=true`; it sent every request path, including instance names, to `log.evolution-api.com` (#21, by @nogara)
+
+### Chores
+
+* Docker base image pinned to the official `node:24.22.1-alpine3.24` by digest (#20, by @nogara)
+
+### Upgrade notes
+
+* The image applies the new migration on start (`Docker/scripts/deploy_database.sh`); it only adds a table and backfills it.
+* Set `TELEMETRY_ENABLED=false` where it is set to `true` explicitly in the environment, since #21 only changes the default.
+
 ## 0.1.1 (2026-10-22)
 
 ### Fixes
