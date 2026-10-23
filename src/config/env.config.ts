@@ -878,7 +878,7 @@ export class ConfigService {
         ALLOWED_IPS: process.env?.METRICS_ALLOWED_IPS,
       },
       TELEMETRY: {
-        ENABLED: process.env?.TELEMETRY_ENABLED === undefined || process.env?.TELEMETRY_ENABLED === 'true',
+        ENABLED: process.env?.TELEMETRY_ENABLED === 'true',
         URL: process.env?.TELEMETRY_URL,
       },
       PROXY: {
