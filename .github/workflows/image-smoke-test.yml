@@ -3,7 +3,7 @@ name: Image smoke test
 on:
   pull_request:
   push:
-    branches: [nogara/stable]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -47,7 +47,9 @@ jobs:
 
       - name: Node.js in the image matches the Dockerfile pin
         run: |
-          expected="v$(grep -m1 -oE '^FROM node:[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | sed 's/^FROM node://')"
+          pins="$(grep -oE '^FROM node:[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | sed 's/^FROM node://' | sort -u)"
+          test "$(echo "$pins" | wc -l)" -eq 1
+          expected="v$pins"
           actual="$(docker run --rm --entrypoint node evolution-api:smoke -v)"
           echo "expected=$expected actual=$actual"
           test "$expected" = "$actual"
@@ -66,8 +68,8 @@ jobs:
 
       - name: Wait for HTTP 200 on /
         run: |
-          for i in $(seq 1 60); do
-            if curl -fsS http://localhost:8080/ -o body.json; then
+          for _ in $(seq 1 60); do
+            if curl -fsS --max-time 5 http://localhost:8080/ -o body.json; then
               cat body.json
               grep -q '"status":200' body.json
               exit 0
@@ -83,7 +85,18 @@ jobs:
 
       - name: Authenticated route answers
         run: |
-          curl -fsS -H 'apikey: smoke-test-key' http://localhost:8080/instance/fetchInstances
+          curl -fsS --max-time 10 -H 'apikey: smoke-test-key' http://localhost:8080/instance/fetchInstances
+
+      - name: Migrations ran on start
+        env:
+          PGPASSWORD: evolution
+        run: |
+          expected=$(find prisma/postgresql-migrations -mindepth 1 -maxdepth 1 -type d | wc -l)
+          applied=$(psql -h localhost -U evolution -d evolution -At -v ON_ERROR_STOP=1 \
+            -c 'select count(*) from evolution_api."_prisma_migrations" where finished_at is not null and rolled_back_at is null')
+          echo "expected=$expected applied=$applied"
+          test "$expected" -eq "$applied"
+          psql -h localhost -U evolution -d evolution -v ON_ERROR_STOP=1 -c 'select count(*) from evolution_api."IsOnWhatsappJid"'
 
       - name: Container logs
         if: always()
