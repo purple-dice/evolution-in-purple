@@ -44,8 +44,8 @@ describe('createJid', () => {
   });
 
   it('keeps the mobile 9 in 13 digit Argentine numbers', () => {
-    expect(createJid('5492616107398')).toBe('5492616107398@s.whatsapp.net');
-    expect(createJid('+54 9 261 610-7398')).toBe('5492616107398@s.whatsapp.net');
+    expect(createJid('5492615550101')).toBe('5492615550101@s.whatsapp.net');
+    expect(createJid('+54 9 261 555-0101')).toBe('5492615550101@s.whatsapp.net');
   });
 
   it.each([
@@ -79,7 +79,7 @@ describe('createJid', () => {
   });
 
   it('keeps 12 digit Argentine numbers unchanged', () => {
-    expect(createJid('542616107398')).toBe('542616107398@s.whatsapp.net');
+    expect(createJid('542615550101')).toBe('542615550101@s.whatsapp.net');
   });
 
   it('keeps the Brazilian ninth digit when the area code is below 31', () => {

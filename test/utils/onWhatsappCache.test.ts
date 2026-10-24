@@ -157,9 +157,9 @@ describe('getOnWhatsappCache', () => {
   });
 
   it('queries Argentine numbers with and without the 9 prefix', async () => {
-    await getOnWhatsappCache(['542616107398@s.whatsapp.net']);
+    await getOnWhatsappCache(['542615550101@s.whatsapp.net']);
 
-    expect(queriedJids()).toEqual(['5492616107398@s.whatsapp.net', '542616107398@s.whatsapp.net']);
+    expect(queriedJids()).toEqual(['5492615550101@s.whatsapp.net', '542615550101@s.whatsapp.net']);
   });
 
   it('queries Mexican numbers with and without the 1 prefix', async () => {

@@ -4,22 +4,22 @@ import { describe, expect, it } from 'vitest';
 describe('resolvePhoneRemoteJid', () => {
   it('replaces a @lid remoteJid with the phone JID from remoteJidAlt', () => {
     expect(
-      resolvePhoneRemoteJid({ remoteJid: '14714994171909@lid', remoteJidAlt: '5492616841080@s.whatsapp.net' }),
-    ).toBe('5492616841080@s.whatsapp.net');
+      resolvePhoneRemoteJid({ remoteJid: '100000000000001@lid', remoteJidAlt: '5492615550102@s.whatsapp.net' }),
+    ).toBe('5492615550102@s.whatsapp.net');
   });
 
   it('keeps a @lid remoteJid when remoteJidAlt is missing', () => {
-    expect(resolvePhoneRemoteJid({ remoteJid: '14714994171909@lid' })).toBe('14714994171909@lid');
+    expect(resolvePhoneRemoteJid({ remoteJid: '100000000000001@lid' })).toBe('100000000000001@lid');
   });
 
   it('keeps a @lid remoteJid when remoteJidAlt is empty', () => {
-    expect(resolvePhoneRemoteJid({ remoteJid: '14714994171909@lid', remoteJidAlt: '' })).toBe('14714994171909@lid');
+    expect(resolvePhoneRemoteJid({ remoteJid: '100000000000001@lid', remoteJidAlt: '' })).toBe('100000000000001@lid');
   });
 
   it('keeps a phone remoteJid even when remoteJidAlt is present', () => {
     expect(
-      resolvePhoneRemoteJid({ remoteJid: '5492616841080@s.whatsapp.net', remoteJidAlt: '14714994171909@lid' }),
-    ).toBe('5492616841080@s.whatsapp.net');
+      resolvePhoneRemoteJid({ remoteJid: '5492615550102@s.whatsapp.net', remoteJidAlt: '100000000000001@lid' }),
+    ).toBe('5492615550102@s.whatsapp.net');
   });
 
   it('keeps a group remoteJid', () => {
@@ -29,18 +29,18 @@ describe('resolvePhoneRemoteJid', () => {
   });
 
   it('KNOWN BUG: replaces a remoteJid that contains @lid outside the suffix (current behavior)', () => {
-    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBe(
-      '5492616841080@s.whatsapp.net',
+    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492615550102@s.whatsapp.net' })).toBe(
+      '5492615550102@s.whatsapp.net',
     );
   });
 
   it.fails('keeps a remoteJid that contains @lid outside the suffix', () => {
-    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBe(
+    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492615550102@s.whatsapp.net' })).toBe(
       'x@lid.example',
     );
   });
 
   it('returns undefined when there is no remoteJid', () => {
-    expect(resolvePhoneRemoteJid({ remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBeUndefined();
+    expect(resolvePhoneRemoteJid({ remoteJidAlt: '5492615550102@s.whatsapp.net' })).toBeUndefined();
   });
 });
