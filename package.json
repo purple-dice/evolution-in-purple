@@ -169,6 +169,10 @@
     "lodash": "^4.18.1",
     "deepmerge-ts": "^8.0.0",
     "link-preview-js": "^4.0.4",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "minio": {
+      "query-string": "^10.0.0",
+      "stream-json": "^3.7.0"
+    }
   }
 }
