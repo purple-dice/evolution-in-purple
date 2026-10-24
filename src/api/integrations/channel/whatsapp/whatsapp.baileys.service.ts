@@ -258,8 +258,9 @@ export class BaileysStartupService extends ChannelStartupService {
   private readonly lidRemoteJidAltBackfill = new LidRemoteJidAltBackfill(this.prismaRepository, this.logger);
 
   private scheduleLidRemoteJidAltBackfill(lid?: string, phoneJid?: string) {
-    const saveData = this.configService.get<Database>('DATABASE').SAVE_DATA;
-    if (!saveData.NEW_MESSAGE && !saveData.HISTORIC) return;
+    const database = this.configService.get<Database>('DATABASE');
+    if (database.PROVIDER !== 'postgresql') return;
+    if (!database.SAVE_DATA.NEW_MESSAGE && !database.SAVE_DATA.HISTORIC) return;
 
     void this.lidRemoteJidAltBackfill.schedule(this.instanceId, lid, phoneJid);
   }

@@ -63,6 +63,35 @@ describe('LidRemoteJidAltBackfill', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
+  it('retries a lid whose previous update failed', async () => {
+    const executeRaw = vi.fn().mockRejectedValueOnce(new Error('db down')).mockResolvedValue(1);
+    const { backfill } = makeBackfill(executeRaw);
+    await backfill.schedule('instance-1', LID, PHONE);
+    await backfill.schedule('instance-1', LID, PHONE);
+    expect(executeRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs one update at a time and keeps going after a failure', async () => {
+    let running = 0;
+    let maxRunning = 0;
+    const executeRaw = vi.fn().mockImplementation(async () => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running--;
+      if (executeRaw.mock.calls.length === 1) throw new Error('db down');
+      return 1;
+    });
+    const { backfill } = makeBackfill(executeRaw);
+    await Promise.all([
+      backfill.schedule('instance-1', LID, PHONE),
+      backfill.schedule('instance-1', '1@lid', PHONE),
+      backfill.schedule('instance-1', '2@lid', PHONE),
+    ]);
+    expect(executeRaw).toHaveBeenCalledTimes(3);
+    expect(maxRunning).toBe(1);
+  });
+
   it('clears the dedupe set once it grows past its bound', async () => {
     const { backfill, executeRaw } = makeBackfill();
     await backfill.schedule('instance-1', LID, PHONE);

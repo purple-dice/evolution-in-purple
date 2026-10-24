@@ -8,6 +8,7 @@ const PHONE_SUFFIX = '@s.whatsapp.net';
 
 export class LidRemoteJidAltBackfill {
   private readonly backfilledLids = new Set<string>();
+  private backfillQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly prismaRepository: PrismaRepository,
@@ -26,10 +27,14 @@ export class LidRemoteJidAltBackfill {
     if (this.backfilledLids.size >= MAX_TRACKED_LIDS) this.backfilledLids.clear();
     this.backfilledLids.add(trackingKey);
 
-    return this.backfill(instanceId, normalizedLid, normalizedPhoneJid);
+    const queuedBackfill = this.backfillQueue.then(() =>
+      this.backfill(trackingKey, instanceId, normalizedLid, normalizedPhoneJid),
+    );
+    this.backfillQueue = queuedBackfill;
+    return queuedBackfill;
   }
 
-  private async backfill(instanceId: string, lid: string, phoneJid: string): Promise<void> {
+  private async backfill(trackingKey: string, instanceId: string, lid: string, phoneJid: string): Promise<void> {
     try {
       const updatedRows = await this.prismaRepository.$executeRaw`
         UPDATE "Message"
@@ -40,6 +45,7 @@ export class LidRemoteJidAltBackfill {
       `;
       if (updatedRows > 0) this.logger.verbose(`Backfilled remoteJidAlt on ${updatedRows} messages for ${lid}`);
     } catch (error) {
+      this.backfilledLids.delete(trackingKey);
       this.logger.warn(`Failed to backfill remoteJidAlt for ${lid}: ${error?.message ?? error}`);
     }
   }
