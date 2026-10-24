@@ -29,10 +29,11 @@ const buildService = (provider: string, saveData: { NEW_MESSAGE: boolean; HISTOR
     S3: { ENABLE: false },
   };
   const configService = { get: vi.fn((key: string) => config[key]) } as any;
+  const prismaRepository = { $executeRaw: vi.fn(async () => 0) } as any;
   const service = new BaileysStartupService(
     configService,
     { emit: vi.fn() } as any,
-    {} as any,
+    prismaRepository,
     {} as any,
     {} as any,
     {} as any,
@@ -41,7 +42,27 @@ const buildService = (provider: string, saveData: { NEW_MESSAGE: boolean; HISTOR
   service.instance.id = 'instance-id';
   service.instance.name = 'instance-name';
   const schedule = vi.spyOn(service.lidRemoteJidAltBackfill, 'schedule').mockReturnValue(undefined);
-  return { service, schedule };
+  return { service, schedule, prismaRepository };
+};
+
+const deliverUpsert = async (service: any, key: Record<string, unknown>) => {
+  await service.messageHandle['messages.upsert'](
+    { messages: [{ key: { id: 'MSG-1', fromMe: false, ...key }, messageTimestamp: 1700000000 }], type: 'notify' },
+    {},
+  );
+};
+
+const runRealSchedule = (service: any, schedule: any) => {
+  const backfills: Array<Promise<void> | undefined> = [];
+  schedule.mockRestore();
+  const spy = vi.spyOn(service.lidRemoteJidAltBackfill, 'schedule');
+  const original = service.lidRemoteJidAltBackfill.constructor.prototype.schedule;
+  spy.mockImplementation((...args: unknown[]) => {
+    const backfill = original.apply(service.lidRemoteJidAltBackfill, args);
+    backfills.push(backfill);
+    return backfill;
+  });
+  return { spy, settled: () => Promise.all(backfills) };
 };
 
 const dispatch = async (service: any, events: Record<string, unknown>) => {
@@ -91,5 +112,29 @@ describe('scheduleLidRemoteJidAltBackfill', () => {
     await dispatch(service, { 'lid-mapping.update': { lid: LID, pn: PHONE_JID } });
 
     expect(schedule).toHaveBeenCalledWith('instance-id', LID, PHONE_JID);
+  });
+
+  it('schedules a backfill with the lid and phone of a 1:1 messages.upsert', async () => {
+    const { service, schedule, prismaRepository } = buildService('postgresql', { NEW_MESSAGE: true, HISTORIC: false });
+    const { spy, settled } = runRealSchedule(service, schedule);
+
+    await deliverUpsert(service, { remoteJid: '111@lid', remoteJidAlt: '5491111@s.whatsapp.net' });
+    await settled();
+
+    expect(spy).toHaveBeenCalledWith('instance-id', '111@lid', '5491111@s.whatsapp.net');
+    expect(prismaRepository.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { name: 'a phone remoteJid', key: { remoteJid: PHONE_JID, remoteJidAlt: LID } },
+    { name: 'a group remoteJid', key: { remoteJid: '120363000000000000@g.us', participant: LID } },
+  ])('does not backfill a messages.upsert with $name', async ({ key }) => {
+    const { service, schedule, prismaRepository } = buildService('postgresql', { NEW_MESSAGE: true, HISTORIC: false });
+    const { settled } = runRealSchedule(service, schedule);
+
+    await deliverUpsert(service, key);
+    await settled();
+
+    expect(prismaRepository.$executeRaw).not.toHaveBeenCalled();
   });
 });
