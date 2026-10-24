@@ -80,6 +80,7 @@ import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 import { Boom } from '@hapi/boom';
 import { createId as cuid } from '@paralleldrive/cuid2';
 import { Instance, Message } from '@prisma/client';
+import { nextMessageStatus } from '@utils/advanceMessageStatus';
 import { createJid } from '@utils/createJid';
 import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { headerAsString } from '@utils/headerAsString';
@@ -1793,6 +1794,16 @@ export class BaileysStartupService extends ChannelStartupService {
                 this.logger.info(
                   `Update readed messages duplicated ignored in message.update [avoid deadlock]: ${messageKey}`,
                 );
+              }
+            }
+
+            if (key.fromMe) {
+              const nextStatus = nextMessageStatus(findMessage.status, status[update.status]);
+              if (nextStatus !== undefined) {
+                await this.prismaRepository.message.update({
+                  where: { id: findMessage.id },
+                  data: { status: nextStatus },
+                });
               }
             }
           }
