@@ -5,6 +5,7 @@
 ### Fixes
 
 * **Sent message status**: messages sent by the instance now advance `Message.status` from WhatsApp acks instead of staying `PENDING`, so `findChats` `lastMessageStatus` and `findMessages` reflect the real status. Applies to 1:1 chats; Baileys delivers no per-message status for groups. Backward acks are ignored and `DELETED`/`EDITED` are never overwritten
+* **Deleted messages resent on retry**: messages deleted for everyone are no longer resent when a device sends a retry receipt, so deleted content no longer reappears. Incoming revokes now mark the stored message `DELETED` and record a `DELETED` message update; the `MESSAGES_DELETE` webhook payload is unchanged
 
 ## 0.1.3 (2026-10-24)
 

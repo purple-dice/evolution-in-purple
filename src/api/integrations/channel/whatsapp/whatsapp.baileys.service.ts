@@ -578,6 +578,10 @@ export class BaileysStartupService extends ChannelStartupService {
       if (!webMessageInfo[0]) {
         return undefined;
       }
+      if (await this.isDeletedMessage(webMessageInfo[0] as any, key)) {
+        this.logger.verbose(`Skipping retry resend of deleted message: ${key.id}`);
+        return undefined;
+      }
       if (webMessageInfo[0].message?.pollCreationMessage) {
         const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
 
@@ -597,6 +601,16 @@ export class BaileysStartupService extends ChannelStartupService {
     } catch {
       return undefined;
     }
+  }
+
+  private async isDeletedMessage(row: { status?: string; key?: { deleted?: boolean } }, key: proto.IMessageKey) {
+    if (row.status === 'DELETED' || row.key?.deleted === true) {
+      return true;
+    }
+    const deletedUpdate = await this.prismaRepository.messageUpdate.findFirst({
+      where: { instanceId: this.instanceId, keyId: key.id, status: 'DELETED' },
+    });
+    return !!deletedUpdate;
   }
 
   private async defineAuthState() {
@@ -1753,6 +1767,21 @@ export class BaileysStartupService extends ChannelStartupService {
 
           if (update.message === null && update.status === undefined) {
             this.sendDataWebhook(Events.MESSAGES_DELETE, { ...key, status: 'DELETED' });
+
+            message.status = 'DELETED';
+
+            if (findMessage?.id) {
+              try {
+                await this.prismaRepository.message.update({
+                  where: { id: findMessage.id },
+                  data: { status: 'DELETED' },
+                });
+              } catch (error) {
+                this.logger.warn(
+                  `Failed to mark revoked message ${findMessage.id} as deleted: ${error?.message ?? error}`,
+                );
+              }
+            }
 
             if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE)
               await this.prismaRepository.messageUpdate.create({ data: message });
@@ -3897,7 +3926,7 @@ export class BaileysStartupService extends ChannelStartupService {
         if (messageId) {
           const isLogicalDeleted = configService.get<Database>('DATABASE').DELETE_DATA.LOGICAL_MESSAGE_DELETE;
           let message = await this.prismaRepository.message.findFirst({
-            where: { key: { path: ['id'], equals: messageId } },
+            where: { instanceId: this.instanceId, key: { path: ['id'], equals: messageId } },
           });
           if (isLogicalDeleted) {
             if (!message) return response;
