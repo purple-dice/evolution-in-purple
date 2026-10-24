@@ -2944,11 +2944,9 @@ export class BaileysStartupService extends ChannelStartupService {
         }
       }
 
-      if (mediaMessage?.fileName) {
-        mimetype = mimeTypes.lookup(mediaMessage.fileName).toString();
-        if (mimetype === 'application/mp4') {
-          mimetype = 'video/mp4';
-        }
+      const fileNameMimetype = mediaMessage?.fileName && mimeTypes.lookup(mediaMessage.fileName);
+      if (fileNameMimetype) {
+        mimetype = fileNameMimetype === 'application/mp4' ? 'video/mp4' : fileNameMimetype;
       }
 
       prepareMedia[mediaType].caption = mediaMessage?.caption;
