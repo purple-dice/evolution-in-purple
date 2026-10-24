@@ -33,7 +33,7 @@ PostgreSQL only.
    psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/dry-run.sql
    ```
 
-3. Apply (single transaction, prints `updated_rows` and `ambiguous_lids_skipped`). Before updating, it copies
+3. Apply (single transaction, prints `updated_rows`, `changed_meanwhile_rows_skipped` and `ambiguous_lids_skipped`). Before updating, it copies
    the original `(id, key)` of every row it is about to change into `"_lid_remote_jid_alt_backup"` (created if
    missing; on re-runs the first saved original wins). It runs with `lock_timeout = '5s'` and
    `statement_timeout = '10min'` so it fails fast instead of blocking live writes; on a timeout nothing is
@@ -43,7 +43,7 @@ PostgreSQL only.
    psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/apply.sql
    ```
 
-4. Verify: run the dry run again. `fixable_rows` must be 0; running `apply.sql` again must print `updated_rows = 0`.
+4. Verify: run the dry run again. `fixable_rows` must be 0; running `apply.sql` again must print `updated_rows = 0`. Rows changed by Evolution while the script ran are skipped (`changed_meanwhile_rows_skipped`); run it again to pick them up.
 
 ## Rollback
 

@@ -25,18 +25,25 @@ WHERE m.key->>'remoteJid' LIKE '%@lid'
   AND coalesce(m.key->>'remoteJidAlt', '') NOT LIKE '%@s.whatsapp.net'
   AND p.phone_jid LIKE '%@s.whatsapp.net';
 
-INSERT INTO "_lid_remote_jid_alt_backup" (id, key)
-SELECT id, original_key FROM lid_backfill_targets
-ON CONFLICT (id) DO NOTHING;
-
 WITH updated AS (
   UPDATE "Message" m
   SET key = jsonb_set(m.key, '{remoteJidAlt}', to_jsonb(t.phone_jid), true)
   FROM lid_backfill_targets t
   WHERE t.id = m.id
+    AND m.key = t.original_key
   RETURNING m.id
+),
+backed_up AS (
+  INSERT INTO "_lid_remote_jid_alt_backup" (id, key)
+  SELECT t.id, t.original_key
+  FROM lid_backfill_targets t
+  JOIN updated u ON u.id = t.id
+  ON CONFLICT (id) DO NOTHING
+  RETURNING id
 )
-SELECT count(*) AS updated_rows FROM updated;
+SELECT
+  (SELECT count(*) FROM updated) AS updated_rows,
+  (SELECT count(*) FROM lid_backfill_targets) - (SELECT count(*) FROM updated) AS changed_meanwhile_rows_skipped;
 
 WITH ambiguous AS (
   SELECT "instanceId", key->>'remoteJid' AS lid
