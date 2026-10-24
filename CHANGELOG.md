@@ -8,6 +8,10 @@
 * **QR code limit**: unpaired instances whose QR code limit is reached now end in `close` (memory and database) instead of staying `connecting`, so requesting the QR code again starts a fresh connection
 * **Deleted messages resent on retry**: messages deleted for everyone are no longer resent when a device sends a retry receipt, so deleted content no longer reappears. Incoming revokes now mark the stored message `DELETED` and record a `DELETED` message update; the `MESSAGES_DELETE` webhook payload is unchanged
 
+### Performance
+
+* **Message lookup indexes**: PostgreSQL migrations add `idx_message_instance_key_id` (`instanceId`, `key->>'id'`) and `idx_message_instance_remotejid_fromme` (`instanceId`, `key->>'remoteJid'`, `key->>'fromMe'`) so message updates and read receipts no longer scan every message of the instance. They are created `IF NOT EXISTS` inside the migration transaction, which runs before the server starts, so databases that already have them are left untouched and a failed build leaves no invalid index
+
 ## 0.1.3 (2026-10-24)
 
 ### Security
