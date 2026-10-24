@@ -7,6 +7,7 @@ import { CacheConf, Chatwoot, ConfigService, Database, DelInstance, ProviderSess
 import { Logger } from '@config/logger.config';
 import { INSTANCE_DIR, STORE_DIR } from '@config/path.config';
 import { NotFoundException } from '@exceptions';
+import { DisconnectReason } from 'baileys';
 import { execFileSync } from 'child_process';
 import EventEmitter2 from 'eventemitter2';
 import { rmSync } from 'fs';
@@ -427,13 +428,28 @@ export class WAMonitoringService {
 
   private noConnection() {
     this.eventEmitter.on('no.connection', async (instanceName) => {
+      const waInstance = this.waInstances[instanceName];
+      if (!waInstance) {
+        return;
+      }
+
       try {
-        await this.waInstances[instanceName]?.client?.logout('Log out instance: ' + instanceName);
+        try {
+          await waInstance.client?.logout('Log out instance: ' + instanceName);
+        } catch (error) {
+          this.logger.verbose(`Instance "${instanceName}" - logout skipped: ${error?.message ?? error}`);
+        }
 
-        this.waInstances[instanceName]?.client?.ws?.close();
+        waInstance.instance.qrcode = { count: 0 };
+        waInstance.stateConnection = { state: 'close', statusReason: DisconnectReason.connectionClosed };
 
-        this.waInstances[instanceName].instance.qrcode = { count: 0 };
-        this.waInstances[instanceName].stateConnection.state = 'close';
+        waInstance.client?.ws?.close();
+        waInstance.client?.end?.(undefined);
+
+        await this.prismaRepository.instance.update({
+          where: { id: waInstance.instanceId },
+          data: { connectionStatus: 'close' },
+        });
       } catch (error) {
         this.logger.error({
           localError: 'noConnection',
