@@ -37,7 +37,9 @@ PostgreSQL only.
    the original `(id, key)` of every row it is about to change into `"_lid_remote_jid_alt_backup"` (created if
    missing; on re-runs the first saved original wins). It runs with `lock_timeout = '5s'` and
    `statement_timeout = '10min'` so it fails fast instead of blocking live writes; on a timeout nothing is
-   committed and it can simply be re-run:
+   committed and it can simply be re-run. Updated rows stay locked until the transaction commits, so live status
+   updates on those rows wait for it; run it during low traffic. Measured candidates are about 20k rows per
+   database, which commits in seconds:
 
    ```bash
    psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/apply.sql
