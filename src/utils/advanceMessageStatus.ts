@@ -10,7 +10,8 @@ const statusRank = (value: string | null | undefined): number => {
 };
 
 export const nextMessageStatus = (current: string | null | undefined, incoming: string): string | undefined => {
-  if (current !== null && current !== undefined && FINAL_STATUSES.includes(current)) {
+  const hasCurrent = current !== null && current !== undefined;
+  if (hasCurrent && (FINAL_STATUSES.includes(current) || statusRank(current) === -1)) {
     return undefined;
   }
   if (incoming === ERROR_STATUS) {

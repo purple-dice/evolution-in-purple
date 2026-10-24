@@ -7,8 +7,9 @@ describe('nextMessageStatus', () => {
     expect(nextMessageStatus(null, 'DELIVERY_ACK')).toBe('DELIVERY_ACK');
   });
 
-  it('treats an unknown current status as the lowest rank', () => {
-    expect(nextMessageStatus('UNKNOWN', 'PENDING')).toBe('PENDING');
+  it('never overwrites an unknown stored status', () => {
+    expect(nextMessageStatus('UNKNOWN', 'READ')).toBeUndefined();
+    expect(nextMessageStatus('UNKNOWN', 'ERROR')).toBeUndefined();
   });
 
   it('advances to a higher status', () => {
