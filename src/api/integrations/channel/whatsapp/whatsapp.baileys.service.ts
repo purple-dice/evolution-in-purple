@@ -764,13 +764,13 @@ export class BaileysStartupService extends ChannelStartupService {
     this.eventHandler();
 
     this.client.ws.on('CB:call', (packet) => {
-      console.log('CB:call', packet);
+      this.logger.verbose(`CB:call received: ${packet?.attrs?.id ?? 'unknown'}`);
       const payload = { event: 'CB:call', packet: packet };
       this.sendDataWebhook(Events.CALL, payload, true, ['websocket']);
     });
 
     this.client.ws.on('CB:ack,class:call', (packet) => {
-      console.log('CB:ack,class:call', packet);
+      this.logger.verbose(`CB:ack,class:call received: ${packet?.attrs?.id ?? 'unknown'}`);
       const payload = { event: 'CB:ack,class:call', packet: packet };
       this.sendDataWebhook(Events.CALL, payload, true, ['websocket']);
     });
@@ -1026,9 +1026,9 @@ export class BaileysStartupService extends ChannelStartupService {
     }) => {
       try {
         if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
-          console.log('received on-demand history sync, messages=', messages);
+          this.logger.verbose(`Received on-demand history sync, messages: ${messages.length}`);
         }
-        console.log(
+        this.logger.verbose(
           `recv ${chats.length} chats, ${contacts.length} contacts, ${messages.length} msgs (is latest: ${isLatest}, progress: ${progress}%), type: ${syncType}`,
         );
 
@@ -1212,14 +1212,16 @@ export class BaileysStartupService extends ChannelStartupService {
             if (text == 'requestPlaceholder' && !requestId) {
               const messageId = await this.client.requestPlaceholderResend(received.key);
 
-              console.log('requested placeholder resync, id=', messageId);
+              this.logger.verbose(`Requested placeholder resync, id: ${messageId}`);
             } else if (requestId) {
-              console.log('Message received from phone, id=', requestId, received);
+              this.logger.verbose(
+                `Message received from phone, request id: ${requestId}, message id: ${received.key?.id}`,
+              );
             }
 
             if (text == 'onDemandHistSync') {
               const messageId = await this.client.fetchMessageHistory(50, received.key, received.messageTimestamp!);
-              console.log('requested on-demand sync, id=', messageId);
+              this.logger.verbose(`Requested on-demand sync, id: ${messageId}`);
             }
           }
 
@@ -1305,7 +1307,7 @@ export class BaileysStartupService extends ChannelStartupService {
                   data: { name: received.pushName },
                 });
               } catch {
-                console.log(`Chat insert record ignored: ${received.key.remoteJid} - ${this.instanceId}`);
+                this.logger.verbose(`Chat insert record ignored: ${received.key.remoteJid} - ${this.instanceId}`);
               }
             }
           }
@@ -1581,15 +1583,13 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
-          this.logger.verbose(messageRaw);
+          this.logger.verbose(`Message received: ${messageRaw.key?.id} (${messageRaw.messageType})`);
 
           sendTelemetry(`received.message.${messageRaw.messageType ?? 'unknown'}`);
           const phoneRemoteJid = resolvePhoneRemoteJid(messageRaw.key);
           if (phoneRemoteJid !== messageRaw.key.remoteJid) {
             messageRaw.key.remoteJid = phoneRemoteJid;
           }
-          console.log(messageRaw);
-
           this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
 
           await this.markMessageSeen(received.key);
@@ -1668,7 +1668,7 @@ export class BaileysStartupService extends ChannelStartupService {
     },
 
     'messages.update': async (args: { update: Partial<WAMessage>; key: WAMessageKey }[], settings: any) => {
-      this.logger.verbose(`Update messages ${JSON.stringify(args, undefined, 2)}`);
+      this.logger.verbose(`Update messages: ${args.length}`);
 
       const readChatToUpdate: Record<string, true> = {}; // {remoteJid: true}
 
@@ -1683,7 +1683,7 @@ export class BaileysStartupService extends ChannelStartupService {
           const cached = await this.baileysCache.get(updateKey);
 
           const secondsSinceEpoch = Math.floor(Date.now() / 1000);
-          console.log('CACHE:', { cached, updateKey, messageTimestamp: update.messageTimestamp, secondsSinceEpoch });
+          this.logger.debug(`Message update cache check: ${updateKey}, cached: ${cached}`);
 
           if (
             (update.messageTimestamp && update.messageTimestamp === cached) ||
@@ -1867,7 +1867,9 @@ export class BaileysStartupService extends ChannelStartupService {
                 try {
                   await this.prismaRepository.chat.update({ where: { id: existingChat.id }, data: chatToInsert });
                 } catch {
-                  console.log(`Chat insert record ignored: ${chatToInsert.remoteJid} - ${chatToInsert.instanceId}`);
+                  this.logger.verbose(
+                    `Chat insert record ignored: ${chatToInsert.remoteJid} - ${chatToInsert.instanceId}`,
+                  );
                 }
               }
             }
@@ -2740,7 +2742,7 @@ export class BaileysStartupService extends ChannelStartupService {
         }
       }
 
-      this.logger.verbose(messageSent);
+      this.logger.verbose(`Message sent: ${messageSent?.key?.id} (${messageRaw.messageType})`);
 
       this.sendDataWebhook(Events.SEND_MESSAGE, messageRaw);
 
@@ -3351,7 +3353,7 @@ export class BaileysStartupService extends ChannelStartupService {
         });
 
         outputAudioStream.on('error', (error) => {
-          console.log('error', error);
+          this.logger.error(['Error in output audio stream', error?.message]);
           reject(error);
         });
 
@@ -3393,8 +3395,8 @@ export class BaileysStartupService extends ChannelStartupService {
             '0',
           ])
           .pipe(outputAudioStream, { end: true })
-          .on('error', function (error) {
-            console.log('error', error);
+          .on('error', (error) => {
+            this.logger.error(['Error in ffmpeg audio conversion', error?.message]);
             reject(error);
           });
       });
@@ -4394,15 +4396,15 @@ export class BaileysStartupService extends ChannelStartupService {
           const messageId = messageSent.message?.protocolMessage?.key?.id;
           if (messageId && this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE) {
             let message = await this.prismaRepository.message.findFirst({
-              where: { key: { path: ['id'], equals: messageId } },
+              where: { instanceId: this.instanceId, key: { path: ['id'], equals: messageId } },
             });
             if (!message) throw new NotFoundException('Message not found');
 
             if (!(message.key.valueOf() as any).fromMe) {
-              new BadRequestException('You cannot edit others messages');
+              throw new BadRequestException('You cannot edit others messages');
             }
             if ((message.key.valueOf() as any)?.deleted) {
-              new BadRequestException('You cannot edit deleted messages');
+              throw new BadRequestException('You cannot edit deleted messages');
             }
 
             if (oldMessage.messageType === 'conversation' || oldMessage.messageType === 'extendedTextMessage') {
@@ -4507,7 +4509,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
     if ((cacheConf?.REDIS?.ENABLED && cacheConf?.REDIS?.URI !== '') || cacheConf?.LOCAL?.ENABLED) {
       if (await groupMetadataCache?.has(groupJid)) {
-        console.log(`Cache request for group: ${groupJid}`);
+        this.logger.verbose(`Cache request for group: ${groupJid}`);
         const meta = await groupMetadataCache.get(groupJid);
 
         if (Date.now() - meta.timestamp > 3600000) {
@@ -4517,7 +4519,7 @@ export class BaileysStartupService extends ChannelStartupService {
         return meta.data;
       }
 
-      console.log(`Cache request for group: ${groupJid} - not found`);
+      this.logger.verbose(`Cache request for group: ${groupJid} - not found`);
       return await this.updateGroupMetadataCache(groupJid);
     }
 
@@ -4956,7 +4958,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async updateChatUnreadMessages(remoteJid: string): Promise<number> {
     const [chat, unreadMessages] = await Promise.all([
-      this.prismaRepository.chat.findFirst({ where: { remoteJid } }),
+      this.prismaRepository.chat.findFirst({ where: { instanceId: this.instanceId, remoteJid } }),
       // Use raw SQL to avoid JSON path issues
       this.prismaRepository.$queryRaw`
         SELECT COUNT(*)::int as count FROM "Message"
@@ -5058,7 +5060,7 @@ export class BaileysStartupService extends ChannelStartupService {
   }
 
   public async baileysSendNode(stanza: any) {
-    console.log('stanza', JSON.stringify(stanza));
+    this.logger.verbose(`Sending stanza: ${stanza?.tag}`);
     const response = await this.client.sendNode(stanza);
 
     return response;
@@ -5142,7 +5144,7 @@ export class BaileysStartupService extends ChannelStartupService {
         catalog: productsCatalog,
       };
     } catch (error) {
-      console.log(error);
+      this.logger.error(['Error fetching business profile', error?.message]);
       return { wuid: jid, name: null, isBusiness: false };
     }
   }
