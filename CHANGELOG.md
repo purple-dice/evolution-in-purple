@@ -10,7 +10,7 @@
 
 ### Performance
 
-* **Message lookup indexes**: PostgreSQL migrations add `idx_message_instance_key_id` (`instanceId`, `key->>'id'`) and `idx_message_instance_remotejid_fromme` (`instanceId`, `key->>'remoteJid'`, `key->>'fromMe'`) so message updates and read receipts no longer scan every message of the instance. They are created `CONCURRENTLY IF NOT EXISTS`: writes are not blocked and databases that already have them are left untouched
+* **Message lookup indexes**: PostgreSQL migrations add `idx_message_instance_key_id` (`instanceId`, `key->>'id'`) and `idx_message_instance_remotejid_fromme` (`instanceId`, `key->>'remoteJid'`, `key->>'fromMe'`) so message updates and read receipts no longer scan every message of the instance. They are created `IF NOT EXISTS` inside the migration transaction, which runs before the server starts, so databases that already have them are left untouched and a failed build leaves no invalid index
 
 ## 0.1.3 (2026-10-24)
 
