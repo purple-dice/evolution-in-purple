@@ -18,6 +18,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',
+    mockReset: true,
     restoreMocks: true,
     unstubEnvs: true,
     unstubGlobals: true,

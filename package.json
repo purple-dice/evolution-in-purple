@@ -160,7 +160,7 @@
     "tsup": "^8.3.5",
     "tsx": "^4.20.5",
     "typescript": "^5.7.2",
-    "vitest": "^3.2.7"
+    "vitest": "^5.0.5"
   },
   "overrides": {
     "@figuro/chatwoot-sdk": {
