@@ -70,6 +70,6 @@ jobs:
           {
             echo "### Fixable CRITICAL/HIGH findings in ${IMAGE_REF}"
             echo '```'
-            cat trivy.txt
+            cat trivy.txt 2>/dev/null || echo 'The scan did not produce a findings table; see the scan step logs.'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
