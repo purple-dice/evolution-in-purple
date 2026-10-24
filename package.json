@@ -77,7 +77,7 @@
     "@figuro/chatwoot-sdk": "^1.1.16",
     "@hapi/boom": "^10.0.1",
     "@paralleldrive/cuid2": "^2.2.2",
-    "@prisma/client": "^6.16.2",
+    "@prisma/client": "^6.19.3",
     "@sentry/node": "^10.12.0",
     "@types/uuid": "^10.0.0",
     "amqplib": "^0.10.5",
@@ -118,7 +118,7 @@
     "patch-package": "^8.0.1",
     "pg": "^8.13.1",
     "pino": "^9.10.0",
-    "prisma": "^6.1.0",
+    "prisma": "^6.19.3",
     "pusher": "^5.2.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
@@ -162,5 +162,12 @@
     "tsx": "^4.20.5",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "@figuro/chatwoot-sdk": {
+      "axios": "^1.20.0"
+    },
+    "lodash": "^4.18.1",
+    "deepmerge-ts": "^8.0.0"
   }
 }
