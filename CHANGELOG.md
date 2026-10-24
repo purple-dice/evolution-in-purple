@@ -5,6 +5,7 @@
 ### Fixes
 
 * **Sent message status**: messages sent by the instance now advance `Message.status` from WhatsApp acks instead of staying `PENDING`, so `findChats` `lastMessageStatus` and `findMessages` reflect the real status. Applies to 1:1 chats; Baileys delivers no per-message status for groups. Backward acks are ignored and `DELETED`/`EDITED` are never overwritten
+* **QR code limit**: unpaired instances whose QR code limit is reached now end in `close` (memory and database) instead of staying `connecting`, so requesting the QR code again starts a fresh connection
 
 ## 0.1.3 (2026-10-24)
 
