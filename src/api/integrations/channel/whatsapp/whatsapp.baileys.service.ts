@@ -83,6 +83,7 @@ import { Instance, Message } from '@prisma/client';
 import { createJid } from '@utils/createJid';
 import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { headerAsString } from '@utils/headerAsString';
+import { LidRemoteJidAltBackfill } from '@utils/lidRemoteJidAltBackfill';
 import { makeProxyAgent, makeProxyAgentUndici } from '@utils/makeProxyAgent';
 import { MESSAGE_DEDUPE_TTL_SECONDS, messageDedupeKey, MessageDedupeKeyInput } from '@utils/messageDedupe';
 import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
@@ -254,6 +255,14 @@ export class BaileysStartupService extends ChannelStartupService {
   private endSession = false;
   private logBaileys = this.configService.get<Log>('LOG').BAILEYS;
   private eventProcessingQueue: Promise<void> = Promise.resolve();
+  private readonly lidRemoteJidAltBackfill = new LidRemoteJidAltBackfill(this.prismaRepository, this.logger);
+
+  private scheduleLidRemoteJidAltBackfill(lid?: string, phoneJid?: string) {
+    const saveData = this.configService.get<Database>('DATABASE').SAVE_DATA;
+    if (!saveData.NEW_MESSAGE && !saveData.HISTORIC) return;
+
+    void this.lidRemoteJidAltBackfill.schedule(this.instanceId, lid, phoneJid);
+  }
 
   // Cache TTL constants (in seconds)
   private readonly MESSAGE_CACHE_TTL_SECONDS = 5 * 60; // 5 minutes - avoid duplicate message processing
@@ -1170,6 +1179,8 @@ export class BaileysStartupService extends ChannelStartupService {
             this.logger.warn(`Message ignored with messageStubParameters: ${JSON.stringify(received, null, 2)}`);
             continue;
           }
+
+          this.scheduleLidRemoteJidAltBackfill(received.key?.remoteJid, received.key?.remoteJidAlt);
           if (received.message?.conversation || received.message?.extendedTextMessage?.text) {
             const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
 
@@ -1987,6 +1998,11 @@ export class BaileysStartupService extends ChannelStartupService {
             if (events['messaging-history.set']) {
               const payload = events['messaging-history.set'];
               await this.messageHandle['messaging-history.set'](payload);
+            }
+
+            if (events['lid-mapping.update']) {
+              const { lid, pn } = events['lid-mapping.update'];
+              this.scheduleLidRemoteJidAltBackfill(lid, pn);
             }
 
             if (events['messages.upsert']) {
