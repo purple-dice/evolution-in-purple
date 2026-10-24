@@ -45,6 +45,7 @@ const buildService = (baileysCache = buildCache()) => {
       createMany: vi.fn(async () => ({})),
       findMany: vi.fn(async () => []),
       update: vi.fn(async () => ({})),
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
     messageUpdate: { create: vi.fn(async () => ({})) },
     contact: { findFirst: vi.fn(async () => null) },
@@ -97,8 +98,8 @@ describe('messages.update status of own messages', () => {
   it('writes the ack status of a sent message by row id', async () => {
     const { prismaRepository } = await runUpdate(true, 'PENDING', 3, '5491111111111@s.whatsapp.net');
 
-    expect(prismaRepository.message.update).toHaveBeenCalledWith({
-      where: { id: 'row-MSG-1' },
+    expect(prismaRepository.message.updateMany).toHaveBeenCalledWith({
+      where: { id: 'row-MSG-1', OR: [{ status: null }, { status: { in: ['ERROR', 'PENDING', 'SERVER_ACK'] } }] },
       data: { status: 'DELIVERY_ACK' },
     });
   });
@@ -106,8 +107,11 @@ describe('messages.update status of own messages', () => {
   it('writes the ack status of a sent message without a remote jid in the key', async () => {
     const { prismaRepository } = await runUpdate(true, 'SERVER_ACK', 4);
 
-    expect(prismaRepository.message.update).toHaveBeenCalledWith({
-      where: { id: 'row-MSG-1' },
+    expect(prismaRepository.message.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'row-MSG-1',
+        OR: [{ status: null }, { status: { in: ['ERROR', 'PENDING', 'SERVER_ACK', 'DELIVERY_ACK'] } }],
+      },
       data: { status: 'READ' },
     });
   });
@@ -115,7 +119,7 @@ describe('messages.update status of own messages', () => {
   it('skips a backward ack but still emits the webhook and records the update', async () => {
     const { service, prismaRepository } = await runUpdate(true, 'READ', 3, '5491111111111@s.whatsapp.net');
 
-    expect(prismaRepository.message.update).not.toHaveBeenCalled();
+    expect(prismaRepository.message.updateMany).not.toHaveBeenCalled();
     expect(updateWebhooks(service)).toHaveLength(1);
     expect(updateWebhooks(service)[0]).not.toHaveProperty('key');
     expect(prismaRepository.messageUpdate.create).toHaveBeenCalledTimes(1);
@@ -124,7 +128,7 @@ describe('messages.update status of own messages', () => {
   it('still emits the webhook and records the update when the status write fails', async () => {
     const { service, prismaRepository } = buildService();
     prismaRepository.$queryRaw = vi.fn(async () => [storedMessage('MSG-1', true, 'PENDING')]);
-    prismaRepository.message.update = vi.fn(async () => {
+    prismaRepository.message.updateMany = vi.fn(async () => {
       throw new Error('db down');
     });
 
@@ -145,6 +149,7 @@ describe('messages.update status of own messages', () => {
       where: { id: 'row-MSG-1' },
       data: { status: 'READ' },
     });
+    expect(prismaRepository.message.updateMany).not.toHaveBeenCalled();
     expect(prismaRepository.messageUpdate.create).toHaveBeenCalledTimes(1);
   });
 });

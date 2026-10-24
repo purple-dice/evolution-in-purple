@@ -80,7 +80,7 @@ import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 import { Boom } from '@hapi/boom';
 import { createId as cuid } from '@paralleldrive/cuid2';
 import { Instance, Message } from '@prisma/client';
-import { nextMessageStatus } from '@utils/advanceMessageStatus';
+import { nextMessageStatus, statusesAdvanceableTo } from '@utils/advanceMessageStatus';
 import { createJid } from '@utils/createJid';
 import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { headerAsString } from '@utils/headerAsString';
@@ -1801,8 +1801,11 @@ export class BaileysStartupService extends ChannelStartupService {
               const nextStatus = nextMessageStatus(findMessage.status, status[update.status]);
               if (nextStatus !== undefined) {
                 try {
-                  await this.prismaRepository.message.update({
-                    where: { id: findMessage.id },
+                  await this.prismaRepository.message.updateMany({
+                    where: {
+                      id: findMessage.id,
+                      OR: [{ status: null }, { status: { in: statusesAdvanceableTo(nextStatus) } }],
+                    },
                     data: { status: nextStatus },
                   });
                 } catch (error) {

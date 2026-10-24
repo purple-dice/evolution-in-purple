@@ -1,4 +1,4 @@
-import { nextMessageStatus } from '@utils/advanceMessageStatus';
+import { nextMessageStatus, statusesAdvanceableTo } from '@utils/advanceMessageStatus';
 import { describe, expect, it } from 'vitest';
 
 describe('nextMessageStatus', () => {
@@ -41,5 +41,11 @@ describe('nextMessageStatus', () => {
         expect(nextMessageStatus(current, incoming)).toBeUndefined();
       }
     }
+  });
+
+  it('lists the stored statuses an incoming status may replace', () => {
+    expect(statusesAdvanceableTo('DELIVERY_ACK')).toEqual(['ERROR', 'PENDING', 'SERVER_ACK']);
+    expect(statusesAdvanceableTo('ERROR')).toEqual(['PENDING', 'SERVER_ACK']);
+    expect(statusesAdvanceableTo('PENDING')).toEqual(['ERROR']);
   });
 });

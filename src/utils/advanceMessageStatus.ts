@@ -18,3 +18,6 @@ export const nextMessageStatus = (current: string | null | undefined, incoming: 
   }
   return statusRank(incoming) > statusRank(current) ? incoming : undefined;
 };
+
+export const statusesAdvanceableTo = (incoming: string): string[] =>
+  Object.values(status).filter((current) => current !== incoming && nextMessageStatus(current, incoming) === incoming);
