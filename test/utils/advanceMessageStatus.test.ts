@@ -29,6 +29,12 @@ describe('nextMessageStatus', () => {
     expect(nextMessageStatus('SERVER_ACK', 'ERROR')).toBe('ERROR');
   });
 
+  it('does not write ERROR after the message was delivered', () => {
+    for (const current of ['DELIVERY_ACK', 'READ', 'PLAYED']) {
+      expect(nextMessageStatus(current, 'ERROR')).toBeUndefined();
+    }
+  });
+
   it('never overwrites DELETED or EDITED', () => {
     for (const current of ['DELETED', 'EDITED']) {
       for (const incoming of ['ERROR', 'PENDING', 'SERVER_ACK', 'DELIVERY_ACK', 'READ', 'PLAYED']) {

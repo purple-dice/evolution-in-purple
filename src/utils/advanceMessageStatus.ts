@@ -2,6 +2,7 @@ import { status } from '@utils/renderStatus';
 
 const FINAL_STATUSES = ['DELETED', 'EDITED'];
 const ERROR_STATUS = status[0];
+const DELIVERY_ACK_STATUS = status[3];
 
 const statusRank = (value: string | null | undefined): number => {
   const entry = Object.entries(status).find(([, name]) => name === value);
@@ -13,7 +14,7 @@ export const nextMessageStatus = (current: string | null | undefined, incoming: 
     return undefined;
   }
   if (incoming === ERROR_STATUS) {
-    return incoming;
+    return statusRank(current) < statusRank(DELIVERY_ACK_STATUS) ? incoming : undefined;
   }
   return statusRank(incoming) > statusRank(current) ? incoming : undefined;
 };

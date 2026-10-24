@@ -1800,10 +1800,16 @@ export class BaileysStartupService extends ChannelStartupService {
             if (key.fromMe) {
               const nextStatus = nextMessageStatus(findMessage.status, status[update.status]);
               if (nextStatus !== undefined) {
-                await this.prismaRepository.message.update({
-                  where: { id: findMessage.id },
-                  data: { status: nextStatus },
-                });
+                try {
+                  await this.prismaRepository.message.update({
+                    where: { id: findMessage.id },
+                    data: { status: nextStatus },
+                  });
+                } catch (error) {
+                  this.logger.warn(
+                    `Failed to update status of sent message ${findMessage.id}: ${error?.message ?? error}`,
+                  );
+                }
               }
             }
           }

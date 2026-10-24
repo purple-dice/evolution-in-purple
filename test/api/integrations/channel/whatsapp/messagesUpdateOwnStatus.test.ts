@@ -121,6 +121,22 @@ describe('messages.update status of own messages', () => {
     expect(prismaRepository.messageUpdate.create).toHaveBeenCalledTimes(1);
   });
 
+  it('still emits the webhook and records the update when the status write fails', async () => {
+    const { service, prismaRepository } = buildService();
+    prismaRepository.$queryRaw = vi.fn(async () => [storedMessage('MSG-1', true, 'PENDING')]);
+    prismaRepository.message.update = vi.fn(async () => {
+      throw new Error('db down');
+    });
+
+    await service.messageHandle['messages.update'](
+      [{ key: { id: 'MSG-1', fromMe: true, remoteJid: '5491111111111@s.whatsapp.net' }, update: { status: 3 } }],
+      {},
+    );
+
+    expect(updateWebhooks(service)).toHaveLength(1);
+    expect(prismaRepository.messageUpdate.create).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the received message path marking the chat as read', async () => {
     const { service, prismaRepository } = await runUpdate(false, 'DELIVERY_ACK', 4, '5491111111111@s.whatsapp.net');
 
