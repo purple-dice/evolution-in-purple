@@ -87,6 +87,7 @@ import { makeProxyAgent, makeProxyAgentUndici } from '@utils/makeProxyAgent';
 import { MESSAGE_DEDUPE_TTL_SECONDS, messageDedupeKey, MessageDedupeKeyInput } from '@utils/messageDedupe';
 import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 import { status } from '@utils/renderStatus';
+import { resolveLidRemoteJidAlt } from '@utils/resolveLidRemoteJidAlt';
 import { resolvePhoneRemoteJid } from '@utils/resolvePhoneRemoteJid';
 import { sendTelemetry } from '@utils/sendTelemetry';
 import useMultiFileAuthStatePrisma from '@utils/use-multi-file-auth-state-prisma';
@@ -1074,6 +1075,14 @@ export class BaileysStartupService extends ChannelStartupService {
         if (chatwootImport.getRepositoryMessagesCache(instance) === null) {
           chatwootImport.setRepositoryMessagesCache(instance, messagesRepository);
         }
+
+        const lidMapping = this.client?.signalRepository?.lidMapping;
+        await resolveLidRemoteJidAlt(
+          messages,
+          contacts,
+          lidMapping?.getPNsForLIDs ? (lids) => lidMapping.getPNsForLIDs(lids) : undefined,
+          (error) => this.logger.warn(`History LID to PN lookup failed: ${(error as Error)?.message}`),
+        );
 
         for (const m of messages) {
           if (!m.message || !m.key || !m.messageTimestamp) {
