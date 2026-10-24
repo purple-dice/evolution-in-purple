@@ -7,6 +7,7 @@
 * **Sent message status**: messages sent by the instance now advance `Message.status` from WhatsApp acks instead of staying `PENDING`, so `findChats` `lastMessageStatus` and `findMessages` reflect the real status. Applies to 1:1 chats; Baileys delivers no per-message status for groups. Backward acks are ignored and `DELETED`/`EDITED` are never overwritten
 * **QR code limit**: unpaired instances whose QR code limit is reached now end in `close` (memory and database) instead of staying `connecting`, so requesting the QR code again starts a fresh connection
 * **Deleted messages resent on retry**: messages deleted for everyone are no longer resent when a device sends a retry receipt, so deleted content no longer reappears. Incoming revokes now mark the stored message `DELETED` and record a `DELETED` message update; the `MESSAGES_DELETE` webhook payload is unchanged
+* **Instance-scoped chat and edit lookups**: recalculating a chat's unread count and editing a sent message now only look up rows of the current instance, so another instance's chat or message with the same `remoteJid` or message id is no longer updated
 
 ## 0.1.3 (2026-10-24)
 
