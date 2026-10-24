@@ -33,7 +33,11 @@ PostgreSQL only.
    psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/dry-run.sql
    ```
 
-3. Apply (single transaction, prints `updated_rows` and `ambiguous_lids_skipped`):
+3. Apply (single transaction, prints `updated_rows` and `ambiguous_lids_skipped`). Before updating, it copies
+   the original `(id, key)` of every row it is about to change into `"_lid_remote_jid_alt_backup"` (created if
+   missing; on re-runs the first saved original wins). It runs with `lock_timeout = '5s'` and
+   `statement_timeout = '10min'` so it fails fast instead of blocking live writes; on a timeout nothing is
+   committed and it can simply be re-run:
 
    ```bash
    psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/apply.sql
@@ -43,5 +47,21 @@ PostgreSQL only.
 
 ## Rollback
 
-Restore the backup taken in step 1 (for example with `pg_restore --clean -t Message -d "$DATABASE_CONNECTION_URI"
-message-backup.dump`).
+Precise rollback from the backup table (single transaction: restores `key` for every backed-up id, prints
+`restored_rows`, then drops `"_lid_remote_jid_alt_backup"`):
+
+```bash
+psql "$DATABASE_CONNECTION_URI" -f scripts/backfill-lid-remote-jid-alt/rollback.sql
+```
+
+Rollback replaces the whole `key` of each backed-up row, so any change made to those keys after `apply.sql`
+(for example a status update) is lost. Roll back soon after applying, or not at all.
+
+The full `pg_dump` from step 1 remains the last-resort backup; restore individual rows from it rather than
+dropping and recreating `"Message"`.
+
+Once the backfill is verified and no rollback is needed, drop the backup table manually:
+
+```sql
+DROP TABLE "_lid_remote_jid_alt_backup";
+```
