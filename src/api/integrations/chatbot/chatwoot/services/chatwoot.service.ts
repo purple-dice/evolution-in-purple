@@ -20,6 +20,7 @@ import ChatwootClient, {
 } from '@figuro/chatwoot-sdk';
 import { request as chatwootRequest } from '@figuro/chatwoot-sdk/dist/core/request';
 import { Chatwoot as ChatwootModel, Contact as ContactModel, Message as MessageModel } from '@prisma/client';
+import { headerAsString } from '@utils/headerAsString';
 import i18next from '@utils/i18n';
 import { sendTelemetry } from '@utils/sendTelemetry';
 import axios from 'axios';
@@ -1204,7 +1205,7 @@ export class ChatwootService {
         const response = await axios.get(media, {
           responseType: 'arraybuffer',
         });
-        mimeType = response.headers['content-type'];
+        mimeType = headerAsString(response.headers['content-type']);
       }
 
       let type = 'document';
@@ -2214,7 +2215,8 @@ export class ChatwootService {
         if (isAdsMessage) {
           const imgBuffer = await axios.get(adsMessage.thumbnailUrl, { responseType: 'arraybuffer' });
 
-          const extension = mimeTypes.extension(imgBuffer.headers['content-type']);
+          const contentType = headerAsString(imgBuffer.headers['content-type']);
+          const extension = contentType && mimeTypes.extension(contentType);
           const mimeType = extension && mimeTypes.lookup(extension);
 
           if (!mimeType) {

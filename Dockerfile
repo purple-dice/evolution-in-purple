@@ -38,6 +38,8 @@ FROM node:24.22.1-alpine3.24@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c
 RUN apk update && \
     apk add tzdata ffmpeg bash openssl
 
+RUN npm install -g npm@11.21.1
+
 ENV TZ=America/Sao_Paulo
 ENV DOCKER_ENV=true
 
