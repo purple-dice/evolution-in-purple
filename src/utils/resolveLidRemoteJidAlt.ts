@@ -10,10 +10,12 @@ const toPhoneJid = (jid?: string | null): string | undefined => {
 const contactLidToPn = (contacts: Contact[]): Map<string, string> => {
   const pairs = new Map<string, string>();
   for (const contact of contacts) {
-    const lid = [contact.lid, contact.id].find((jid) => jid && isLidUser(jid));
+    const lids = new Set(
+      [contact.lid, contact.id].filter((jid) => jid && isLidUser(jid)).map((jid) => jidNormalizedUser(jid)),
+    );
     const pn = toPhoneJid(contact.phoneNumber) ?? toPhoneJid(contact.id);
-    if (lid && pn) {
-      pairs.set(jidNormalizedUser(lid), pn);
+    if (lids.size === 1 && pn) {
+      pairs.set([...lids][0], pn);
     }
   }
   return pairs;

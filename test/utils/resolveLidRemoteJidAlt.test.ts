@@ -23,6 +23,16 @@ describe('resolveLidRemoteJidAlt', () => {
     expect(messages[0].key).toMatchObject({ remoteJid: '555@lid', remoteJidAlt: '5495555555555@s.whatsapp.net' });
   });
 
+  it('ignores a contact whose id and lid are different lids', async () => {
+    const messages = [message('666@lid'), message('777@lid')];
+
+    await resolveLidRemoteJidAlt(messages, [
+      { id: '666@lid', lid: '777@lid', phoneNumber: '5496666666666@s.whatsapp.net' },
+    ]);
+
+    expect(messages.map((m) => m.key.remoteJidAlt)).toEqual([undefined, undefined]);
+  });
+
   it('fills remoteJidAlt from a contact whose id is the phone jid and lid is set', async () => {
     const messages = [message('222@lid')];
 
