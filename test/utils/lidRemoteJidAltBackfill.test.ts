@@ -1,8 +1,8 @@
 import { LidRemoteJidAltBackfill } from '@utils/lidRemoteJidAltBackfill';
 import { describe, expect, it, vi } from 'vitest';
 
-const LID = '14714994171909@lid';
-const PHONE = '5492616841080@s.whatsapp.net';
+const LID = '100000000000001@lid';
+const PHONE = '5492615550102@s.whatsapp.net';
 
 function makeBackfill(executeRaw = vi.fn().mockResolvedValue(3)) {
   const prisma = { $executeRaw: executeRaw } as any;
@@ -32,7 +32,7 @@ describe('LidRemoteJidAltBackfill', () => {
 
   it('normalizes device suffixes before backfilling', async () => {
     const { backfill, executeRaw } = makeBackfill();
-    await backfill.schedule('instance-1', '14714994171909:12@lid', '5492616841080:3@s.whatsapp.net');
+    await backfill.schedule('instance-1', '100000000000001:12@lid', '5492615550102:3@s.whatsapp.net');
     const values = executeRaw.mock.calls[0].slice(1);
     expect(values).toEqual(expect.arrayContaining([LID, PHONE]));
   });
@@ -49,7 +49,7 @@ describe('LidRemoteJidAltBackfill', () => {
     ['missing lid', undefined, PHONE],
     ['missing phone', LID, undefined],
     ['phone that is not a user JID', LID, '123@lid'],
-    ['lid that is not a lid', '5492616841080@s.whatsapp.net', PHONE],
+    ['lid that is not a lid', '5492615550102@s.whatsapp.net', PHONE],
     ['group participant', '120363000000000000@g.us', PHONE],
   ])('skips a %s', (_label, lid, phone) => {
     const { backfill, executeRaw } = makeBackfill();
