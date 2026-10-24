@@ -1,0 +1,95 @@
+diff --git a/node_modules/minio/dist/esm/helpers.mjs b/node_modules/minio/dist/esm/helpers.mjs
+index edac39c..8e547bc 100644
+--- a/node_modules/minio/dist/esm/helpers.mjs
++++ b/node_modules/minio/dist/esm/helpers.mjs
+@@ -1,6 +1,6 @@
+ import * as fs from "fs";
+ import * as path from "path";
+-import * as querystring from 'query-string';
++import querystring from 'query-string';
+ import * as errors from "./errors.mjs";
+ import { getEncryptionHeaders, isEmpty, isEmptyObject, isNumber, isObject, isString, isValidBucketName, isValidObjectName } from "./internal/helper.mjs";
+ import { RETENTION_MODES } from "./internal/type.mjs";
+diff --git a/node_modules/minio/dist/esm/internal/client.mjs b/node_modules/minio/dist/esm/internal/client.mjs
+index e9f9669..17c4c8d 100644
+--- a/node_modules/minio/dist/esm/internal/client.mjs
++++ b/node_modules/minio/dist/esm/internal/client.mjs
+@@ -8,7 +8,7 @@ import * as async from 'async';
+ import BlockStream2 from 'block-stream2';
+ import { isBrowser } from 'browser-or-node';
+ import _ from 'lodash';
+-import * as qs from 'query-string';
++import qs from 'query-string';
+ import xml2js from 'xml2js';
+ import { CredentialProvider } from "../CredentialProvider.mjs";
+ import * as errors from "../errors.mjs";
+diff --git a/node_modules/minio/dist/esm/notification.mjs b/node_modules/minio/dist/esm/notification.mjs
+index 2fe075b..a07da8d 100644
+--- a/node_modules/minio/dist/esm/notification.mjs
++++ b/node_modules/minio/dist/esm/notification.mjs
+@@ -15,7 +15,7 @@
+  */
+ 
+ import { EventEmitter } from 'eventemitter3';
+-import jsonLineParser from 'stream-json/jsonl/Parser.js';
++import jsonLineParser from 'stream-json/jsonl/parser.js';
+ import { DEFAULT_REGION } from "./helpers.mjs";
+ import { pipesetup, uriEscape } from "./internal/helper.mjs";
+ 
+@@ -176,7 +176,7 @@ export class NotificationPoller extends EventEmitter {
+       bucketName: this.bucketName,
+       query
+     }, '', [200], region).then(response => {
+-      const asm = jsonLineParser.make();
++      const asm = jsonLineParser.asStream();
+       pipesetup(response, asm).on('data', data => {
+         // Data is flushed periodically (every 5 seconds), so we should
+         // handle it after flushing from the JSON parser.
+diff --git a/node_modules/minio/dist/main/helpers.js b/node_modules/minio/dist/main/helpers.js
+index bea5b04..d19b46c 100644
+--- a/node_modules/minio/dist/main/helpers.js
++++ b/node_modules/minio/dist/main/helpers.js
+@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", {
+ exports.removeDirAndFiles = removeDirAndFiles;
+ var fs = _interopRequireWildcard(require("fs"), true);
+ var path = _interopRequireWildcard(require("path"), true);
+-var querystring = _interopRequireWildcard(require("query-string"), true);
++var querystring = require("query-string").default;
+ var errors = _interopRequireWildcard(require("./errors.js"), true);
+ var _helper = require("./internal/helper.js");
+ var _type = require("./internal/type.js");
+diff --git a/node_modules/minio/dist/main/internal/client.js b/node_modules/minio/dist/main/internal/client.js
+index 5ab16ff..306b586 100644
+--- a/node_modules/minio/dist/main/internal/client.js
++++ b/node_modules/minio/dist/main/internal/client.js
+@@ -13,7 +13,7 @@ var async = _interopRequireWildcard(require("async"), true);
+ var _blockStream = require("block-stream2");
+ var _browserOrNode = require("browser-or-node");
+ var _lodash = require("lodash");
+-var qs = _interopRequireWildcard(require("query-string"), true);
++var qs = require("query-string").default;
+ var _xml2js = require("xml2js");
+ var _CredentialProvider = require("../CredentialProvider.js");
+ var errors = _interopRequireWildcard(require("../errors.js"), true);
+diff --git a/node_modules/minio/dist/main/notification.js b/node_modules/minio/dist/main/notification.js
+index 8d8e8b3..6fe6e90 100644
+--- a/node_modules/minio/dist/main/notification.js
++++ b/node_modules/minio/dist/main/notification.js
+@@ -4,7 +4,7 @@ Object.defineProperty(exports, "__esModule", {
+   value: true
+ });
+ var _eventemitter = require("eventemitter3");
+-var _Parser = require("stream-json/jsonl/Parser.js");
++var _jsonlParser = require("stream-json/jsonl/parser.js").default;
+ var _helpers = require("./helpers.js");
+ var _helper = require("./internal/helper.js");
+ /*
+@@ -196,7 +196,7 @@ class NotificationPoller extends _eventemitter.EventEmitter {
+       bucketName: this.bucketName,
+       query
+     }, '', [200], region).then(response => {
+-      const asm = _Parser.make();
++      const asm = _jsonlParser.asStream();
+       (0, _helper.pipesetup)(response, asm).on('data', data => {
+         // Data is flushed periodically (every 5 seconds), so we should
+         // handle it after flushing from the JSON parser.

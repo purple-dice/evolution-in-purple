@@ -15,12 +15,12 @@
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "commit": "cz",
     "commitlint": "commitlint --edit",
-    "db:generate": "node runWithProvider.js \"npx prisma generate --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
-    "db:deploy": "node runWithProvider.js \"rm -rf ./prisma/migrations && cp -r ./prisma/DATABASE_PROVIDER-migrations ./prisma/migrations && npx prisma migrate deploy --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
-    "db:deploy:win": "node runWithProvider.js \"xcopy /E /I prisma\\DATABASE_PROVIDER-migrations prisma\\migrations && npx prisma migrate deploy --schema prisma\\DATABASE_PROVIDER-schema.prisma\"",
-    "db:studio": "node runWithProvider.js \"npx prisma studio --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
-    "db:migrate:dev": "node runWithProvider.js \"rm -rf ./prisma/migrations && cp -r ./prisma/DATABASE_PROVIDER-migrations ./prisma/migrations && npx prisma migrate dev --schema ./prisma/DATABASE_PROVIDER-schema.prisma && cp -r ./prisma/migrations/* ./prisma/DATABASE_PROVIDER-migrations\"",
-    "db:migrate:dev:win": "node runWithProvider.js \"xcopy /E /I prisma\\DATABASE_PROVIDER-migrations prisma\\migrations && npx prisma migrate dev --schema prisma\\DATABASE_PROVIDER-schema.prisma\"",
+    "db:generate": "node runWithProvider.js \"prisma generate --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
+    "db:deploy": "node runWithProvider.js \"rm -rf ./prisma/migrations && cp -r ./prisma/DATABASE_PROVIDER-migrations ./prisma/migrations && prisma migrate deploy --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
+    "db:deploy:win": "node runWithProvider.js \"xcopy /E /I prisma\\DATABASE_PROVIDER-migrations prisma\\migrations && prisma migrate deploy --schema prisma\\DATABASE_PROVIDER-schema.prisma\"",
+    "db:studio": "node runWithProvider.js \"prisma studio --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
+    "db:migrate:dev": "node runWithProvider.js \"rm -rf ./prisma/migrations && cp -r ./prisma/DATABASE_PROVIDER-migrations ./prisma/migrations && prisma migrate dev --schema ./prisma/DATABASE_PROVIDER-schema.prisma && cp -r ./prisma/migrations/* ./prisma/DATABASE_PROVIDER-migrations\"",
+    "db:migrate:dev:win": "node runWithProvider.js \"xcopy /E /I prisma\\DATABASE_PROVIDER-migrations prisma\\migrations && prisma migrate dev --schema prisma\\DATABASE_PROVIDER-schema.prisma\"",
     "prepare": "husky",
     "postinstall": "patch-package",
     "test:watch": "vitest"
@@ -113,7 +113,7 @@
     "multer": "^2.0.2",
     "nats": "^2.29.1",
     "node-cache": "^5.1.2",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.6.0",
     "openai": "^4.77.3",
     "patch-package": "^8.0.1",
     "pg": "^8.13.1",
@@ -142,7 +142,6 @@
     "@types/mime": "^4.0.0",
     "@types/mime-types": "^2.1.4",
     "@types/node": "^24.5.2",
-    "@types/node-cron": "^3.0.11",
     "@types/qrcode": "^1.5.5",
     "@types/qrcode-terminal": "^0.12.2",
     "@typescript-eslint/eslint-plugin": "^8.44.0",
@@ -169,6 +168,11 @@
     },
     "lodash": "^4.18.1",
     "deepmerge-ts": "^8.0.0",
-    "link-preview-js": "^4.0.4"
+    "link-preview-js": "^4.0.4",
+    "zod": "^4.6.7",
+    "minio": {
+      "query-string": "^10.0.0",
+      "stream-json": "^3.7.0"
+    }
   }
 }
