@@ -1,5 +1,32 @@
 # evolution-in-purple
 
+## 0.1.3 (2026-10-24)
+
+### Security
+
+* **Image vulnerabilities**: the release image goes from 162 fixable CRITICAL/HIGH Trivy findings in 0.1.2 to **0 findings of any severity**, and `npm audit` reports 0 including development dependencies (#26, #27, #29, #30)
+  * The image ships only production dependencies; `tsup` moves to devDependencies (#26)
+  * Semver-compatible updates of production dependencies, including axios 1.20, express, undici, multer and ws (#27)
+  * `@figuro/chatwoot-sdk` runs on the shared axios 1.x instead of axios 0.27.2 (#27)
+  * sharp 0.35 and link-preview-js 4 (#27); node-cron 4; zod 4 for jimp and openai (#29)
+  * `minio` is patched to run on query-string 10 and stream-json 3, verified against a SigV4-validating S3 server (#29)
+  * The image runs without npm/npx: start scripts call node and prisma directly (#29)
+  * vitest 5 and semver fixes for development tooling (#30)
+
+### Fixes
+
+* **Media mimetype**: sending media with a file name without a known extension no longer sets the mimetype to the string "false"; images keep `image/jpeg` and URL media keep the downloaded content type (#28)
+
+### Chores
+
+* CI builds the image and smoke-tests it against Postgres on every PR, checking the Node.js pin and that every migration applied (#24; adapted from @nogara)
+* A daily Trivy scan reports findings in the latest released image to code scanning (#25; adapted from @nogara)
+
+### Upgrade notes
+
+* `npm` and `npx` are no longer available inside the container. Use `node` and `./node_modules/.bin/prisma` for manual operations.
+* `zod` is overridden to 4 for jimp and openai; Evolution's OpenAI structured-output helpers are not used.
+
 ## 0.1.2 (2026-10-23)
 
 ### Features
