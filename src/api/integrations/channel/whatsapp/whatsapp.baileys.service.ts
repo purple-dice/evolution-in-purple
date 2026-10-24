@@ -1185,8 +1185,8 @@ export class BaileysStartupService extends ChannelStartupService {
       { messages, type, requestId }: { messages: WAMessage[]; type: MessageUpsertType; requestId?: string },
       settings: any,
     ) => {
-      try {
-        for (const received of messages) {
+      for (const received of messages) {
+        try {
           if (
             received?.messageStubParameters?.some?.((param) =>
               [
@@ -1661,9 +1661,9 @@ export class BaileysStartupService extends ChannelStartupService {
               update: contactRaw,
               create: contactRaw,
             });
+        } catch (error) {
+          this.logger.error(`Failed to process upserted message ${received?.key?.id}: ${error?.message ?? error}`);
         }
-      } catch (error) {
-        this.logger.error(error);
       }
     },
 
@@ -1673,203 +1673,207 @@ export class BaileysStartupService extends ChannelStartupService {
       const readChatToUpdate: Record<string, true> = {}; // {remoteJid: true}
 
       for await (const { key, update } of args) {
-        if (settings?.groupsIgnore && key.remoteJid?.includes('@g.us')) {
-          continue;
-        }
-
-        const updateKey = `${this.instance.id}_${key.id}_${update.status}`;
-
-        const cached = await this.baileysCache.get(updateKey);
-
-        const secondsSinceEpoch = Math.floor(Date.now() / 1000);
-        console.log('CACHE:', { cached, updateKey, messageTimestamp: update.messageTimestamp, secondsSinceEpoch });
-
-        if (
-          (update.messageTimestamp && update.messageTimestamp === cached) ||
-          (!update.messageTimestamp && secondsSinceEpoch === cached)
-        ) {
-          this.logger.info(`Update Message duplicated ignored [avoid deadlock]: ${updateKey}`);
-          continue;
-        }
-
-        if (update.messageTimestamp) {
-          await this.baileysCache.set(updateKey, update.messageTimestamp, 30 * 60);
-        } else {
-          await this.baileysCache.set(updateKey, secondsSinceEpoch, 30 * 60);
-        }
-
-        if (status[update.status] === 'READ' && key.fromMe) {
-          if (this.configService.get<Chatwoot>('CHATWOOT').ENABLED && this.localChatwoot?.enabled) {
-            this.chatwootService.eventWhatsapp(
-              'messages.read',
-              { instanceName: this.instance.name, instanceId: this.instanceId },
-              { key: key },
-            );
-          }
-        }
-
-        if (key.remoteJid !== 'status@broadcast' && key.id !== undefined) {
-          let pollUpdates: any;
-
-          if (update.pollUpdates) {
-            const pollCreation = await this.getMessage(key);
-
-            if (pollCreation) {
-              pollUpdates = getAggregateVotesInPollMessage({
-                message: pollCreation as proto.IMessage,
-                pollUpdates: update.pollUpdates,
-              });
-            }
+        try {
+          if (settings?.groupsIgnore && key.remoteJid?.includes('@g.us')) {
+            continue;
           }
 
-          const message: any = {
-            keyId: key.id,
-            remoteJid: key?.remoteJid,
-            fromMe: key.fromMe,
-            participant: key?.participant,
-            status: status[update.status] ?? 'SERVER_ACK',
-            pollUpdates,
-            instanceId: this.instanceId,
-          };
+          const updateKey = `${this.instance.id}_${key.id}_${update.status}`;
 
-          if (update.message) {
-            message.message = update.message;
+          const cached = await this.baileysCache.get(updateKey);
+
+          const secondsSinceEpoch = Math.floor(Date.now() / 1000);
+          console.log('CACHE:', { cached, updateKey, messageTimestamp: update.messageTimestamp, secondsSinceEpoch });
+
+          if (
+            (update.messageTimestamp && update.messageTimestamp === cached) ||
+            (!update.messageTimestamp && secondsSinceEpoch === cached)
+          ) {
+            this.logger.info(`Update Message duplicated ignored [avoid deadlock]: ${updateKey}`);
+            continue;
           }
 
-          let findMessage: any;
-          const configDatabaseData = this.configService.get<Database>('DATABASE').SAVE_DATA;
-          if (configDatabaseData.HISTORIC || configDatabaseData.NEW_MESSAGE) {
-            // Use raw SQL to avoid JSON path issues
-            const protocolMapKey = `protocol_${key.id}`;
-            const originalMessageId = (await this.baileysCache.get(protocolMapKey)) as string;
-
-            if (originalMessageId) {
-              message.keyId = originalMessageId;
-            }
-
-            const searchId = originalMessageId || key.id;
-
-            const messages = (await this.prismaRepository.$queryRaw`
-              SELECT * FROM "Message"
-              WHERE "instanceId" = ${this.instanceId}
-              AND "key"->>'id' = ${searchId}
-              LIMIT 1
-            `) as any[];
-            findMessage = messages[0] || null;
-
-            if (!findMessage?.id) {
-              this.logger.warn(`Original message not found for update. Skipping. Key: ${JSON.stringify(key)}`);
-              continue;
-            }
-            message.messageId = findMessage.id;
-            message.remoteJid = message.remoteJid ?? findMessage.key?.remoteJid;
+          if (update.messageTimestamp) {
+            await this.baileysCache.set(updateKey, update.messageTimestamp, 30 * 60);
+          } else {
+            await this.baileysCache.set(updateKey, secondsSinceEpoch, 30 * 60);
           }
 
-          if (update.message === null && update.status === undefined) {
-            this.sendDataWebhook(Events.MESSAGES_DELETE, { ...key, status: 'DELETED' });
-
-            message.status = 'DELETED';
-
-            if (findMessage?.id) {
-              try {
-                await this.prismaRepository.message.update({
-                  where: { id: findMessage.id },
-                  data: { status: 'DELETED' },
-                });
-              } catch (error) {
-                this.logger.warn(
-                  `Failed to mark revoked message ${findMessage.id} as deleted: ${error?.message ?? error}`,
-                );
-              }
-            }
-
-            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE)
-              await this.prismaRepository.messageUpdate.create({ data: message });
-
+          if (status[update.status] === 'READ' && key.fromMe) {
             if (this.configService.get<Chatwoot>('CHATWOOT').ENABLED && this.localChatwoot?.enabled) {
               this.chatwootService.eventWhatsapp(
-                Events.MESSAGES_DELETE,
+                'messages.read',
                 { instanceName: this.instance.name, instanceId: this.instanceId },
                 { key: key },
               );
             }
-
-            continue;
           }
 
-          if (findMessage && update.status !== undefined && status[update.status] !== findMessage.status) {
-            if (!key.fromMe && key.remoteJid) {
-              readChatToUpdate[key.remoteJid] = true;
+          if (key.remoteJid !== 'status@broadcast' && key.id !== undefined) {
+            let pollUpdates: any;
 
-              const { remoteJid } = key;
-              const timestamp = findMessage.messageTimestamp;
-              const fromMe = key.fromMe.toString();
-              const messageKey = `${remoteJid}_${timestamp}_${fromMe}`;
+            if (update.pollUpdates) {
+              const pollCreation = await this.getMessage(key);
 
-              const cachedTimestamp = await this.baileysCache.get(messageKey);
-
-              if (!cachedTimestamp) {
-                if (status[update.status] === status[4]) {
-                  this.logger.log(`Update as read in message.update ${remoteJid} - ${timestamp}`);
-                  await this.updateMessagesReadedByTimestamp(remoteJid, timestamp);
-                  await this.baileysCache.set(messageKey, true, this.MESSAGE_CACHE_TTL_SECONDS);
-                }
-
-                await this.prismaRepository.message.update({
-                  where: { id: findMessage.id },
-                  data: { status: status[update.status] },
+              if (pollCreation) {
+                pollUpdates = getAggregateVotesInPollMessage({
+                  message: pollCreation as proto.IMessage,
+                  pollUpdates: update.pollUpdates,
                 });
-              } else {
-                this.logger.info(
-                  `Update readed messages duplicated ignored in message.update [avoid deadlock]: ${messageKey}`,
-                );
               }
             }
 
-            if (key.fromMe) {
-              const nextStatus = nextMessageStatus(findMessage.status, status[update.status]);
-              if (nextStatus !== undefined) {
+            const message: any = {
+              keyId: key.id,
+              remoteJid: key?.remoteJid,
+              fromMe: key.fromMe,
+              participant: key?.participant,
+              status: status[update.status] ?? 'SERVER_ACK',
+              pollUpdates,
+              instanceId: this.instanceId,
+            };
+
+            if (update.message) {
+              message.message = update.message;
+            }
+
+            let findMessage: any;
+            const configDatabaseData = this.configService.get<Database>('DATABASE').SAVE_DATA;
+            if (configDatabaseData.HISTORIC || configDatabaseData.NEW_MESSAGE) {
+              // Use raw SQL to avoid JSON path issues
+              const protocolMapKey = `protocol_${key.id}`;
+              const originalMessageId = (await this.baileysCache.get(protocolMapKey)) as string;
+
+              if (originalMessageId) {
+                message.keyId = originalMessageId;
+              }
+
+              const searchId = originalMessageId || key.id;
+
+              const messages = (await this.prismaRepository.$queryRaw`
+                SELECT * FROM "Message"
+                WHERE "instanceId" = ${this.instanceId}
+                AND "key"->>'id' = ${searchId}
+                LIMIT 1
+              `) as any[];
+              findMessage = messages[0] || null;
+
+              if (!findMessage?.id) {
+                this.logger.warn(`Original message not found for update. Skipping. Key: ${JSON.stringify(key)}`);
+                continue;
+              }
+              message.messageId = findMessage.id;
+              message.remoteJid = message.remoteJid ?? findMessage.key?.remoteJid;
+            }
+
+            if (update.message === null && update.status === undefined) {
+              this.sendDataWebhook(Events.MESSAGES_DELETE, { ...key, status: 'DELETED' });
+
+              message.status = 'DELETED';
+
+              if (findMessage?.id) {
                 try {
-                  await this.prismaRepository.message.updateMany({
-                    where: {
-                      id: findMessage.id,
-                      OR: [{ status: null }, { status: { in: statusesAdvanceableTo(nextStatus) } }],
-                    },
-                    data: { status: nextStatus },
+                  await this.prismaRepository.message.update({
+                    where: { id: findMessage.id },
+                    data: { status: 'DELETED' },
                   });
                 } catch (error) {
                   this.logger.warn(
-                    `Failed to update status of sent message ${findMessage.id}: ${error?.message ?? error}`,
+                    `Failed to mark revoked message ${findMessage.id} as deleted: ${error?.message ?? error}`,
                   );
+                }
+              }
+
+              if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE)
+                await this.prismaRepository.messageUpdate.create({ data: message });
+
+              if (this.configService.get<Chatwoot>('CHATWOOT').ENABLED && this.localChatwoot?.enabled) {
+                this.chatwootService.eventWhatsapp(
+                  Events.MESSAGES_DELETE,
+                  { instanceName: this.instance.name, instanceId: this.instanceId },
+                  { key: key },
+                );
+              }
+
+              continue;
+            }
+
+            if (findMessage && update.status !== undefined && status[update.status] !== findMessage.status) {
+              if (!key.fromMe && key.remoteJid) {
+                readChatToUpdate[key.remoteJid] = true;
+
+                const { remoteJid } = key;
+                const timestamp = findMessage.messageTimestamp;
+                const fromMe = key.fromMe.toString();
+                const messageKey = `${remoteJid}_${timestamp}_${fromMe}`;
+
+                const cachedTimestamp = await this.baileysCache.get(messageKey);
+
+                if (!cachedTimestamp) {
+                  if (status[update.status] === status[4]) {
+                    this.logger.log(`Update as read in message.update ${remoteJid} - ${timestamp}`);
+                    await this.updateMessagesReadedByTimestamp(remoteJid, timestamp);
+                    await this.baileysCache.set(messageKey, true, this.MESSAGE_CACHE_TTL_SECONDS);
+                  }
+
+                  await this.prismaRepository.message.update({
+                    where: { id: findMessage.id },
+                    data: { status: status[update.status] },
+                  });
+                } else {
+                  this.logger.info(
+                    `Update readed messages duplicated ignored in message.update [avoid deadlock]: ${messageKey}`,
+                  );
+                }
+              }
+
+              if (key.fromMe) {
+                const nextStatus = nextMessageStatus(findMessage.status, status[update.status]);
+                if (nextStatus !== undefined) {
+                  try {
+                    await this.prismaRepository.message.updateMany({
+                      where: {
+                        id: findMessage.id,
+                        OR: [{ status: null }, { status: { in: statusesAdvanceableTo(nextStatus) } }],
+                      },
+                      data: { status: nextStatus },
+                    });
+                  } catch (error) {
+                    this.logger.warn(
+                      `Failed to update status of sent message ${findMessage.id}: ${error?.message ?? error}`,
+                    );
+                  }
+                }
+              }
+            }
+
+            this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
+
+            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { message: _msg, ...messageData } = message;
+              await this.prismaRepository.messageUpdate.create({ data: messageData });
+            }
+
+            const existingChat = await this.prismaRepository.chat.findFirst({
+              where: { instanceId: this.instanceId, remoteJid: message.remoteJid },
+            });
+
+            if (existingChat) {
+              const chatToInsert = { remoteJid: message.remoteJid, instanceId: this.instanceId, unreadMessages: 0 };
+
+              this.sendDataWebhook(Events.CHATS_UPSERT, [chatToInsert]);
+              if (this.configService.get<Database>('DATABASE').SAVE_DATA.CHATS) {
+                try {
+                  await this.prismaRepository.chat.update({ where: { id: existingChat.id }, data: chatToInsert });
+                } catch {
+                  console.log(`Chat insert record ignored: ${chatToInsert.remoteJid} - ${chatToInsert.instanceId}`);
                 }
               }
             }
           }
-
-          this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
-
-          if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { message: _msg, ...messageData } = message;
-            await this.prismaRepository.messageUpdate.create({ data: messageData });
-          }
-
-          const existingChat = await this.prismaRepository.chat.findFirst({
-            where: { instanceId: this.instanceId, remoteJid: message.remoteJid },
-          });
-
-          if (existingChat) {
-            const chatToInsert = { remoteJid: message.remoteJid, instanceId: this.instanceId, unreadMessages: 0 };
-
-            this.sendDataWebhook(Events.CHATS_UPSERT, [chatToInsert]);
-            if (this.configService.get<Database>('DATABASE').SAVE_DATA.CHATS) {
-              try {
-                await this.prismaRepository.chat.update({ where: { id: existingChat.id }, data: chatToInsert });
-              } catch {
-                console.log(`Chat insert record ignored: ${chatToInsert.remoteJid} - ${chatToInsert.instanceId}`);
-              }
-            }
-          }
+        } catch (error) {
+          this.logger.error(`Failed to process message update ${key?.id}: ${error?.message ?? error}`);
         }
       }
 
@@ -2019,6 +2023,14 @@ export class BaileysStartupService extends ChannelStartupService {
     },
   };
 
+  private async runEventStep(eventName: string, step: () => Promise<void>) {
+    try {
+      await step();
+    } catch (error) {
+      this.logger.error(`Failed to process ${eventName} event: ${error?.message ?? error}`);
+    }
+  }
+
   private eventHandler() {
     this.client.ev.process(async (events) => {
       this.eventProcessingQueue = this.eventProcessingQueue.then(async () => {
@@ -2028,133 +2040,169 @@ export class BaileysStartupService extends ChannelStartupService {
             const settings = await this.findSettings();
 
             if (events.call) {
-              const call = events.call[0];
+              await this.runEventStep('call', async () => {
+                const call = events.call[0];
 
-              if (settings?.rejectCall && call.status == 'offer') {
-                this.client.rejectCall(call.id, call.from);
-              }
-
-              if (settings?.msgCall?.trim().length > 0 && call.status == 'offer') {
-                if (call.from.endsWith('@lid')) {
-                  call.from = await this.client.signalRepository.lidMapping.getPNForLID(call.from as string);
+                if (settings?.rejectCall && call.status == 'offer') {
+                  this.client.rejectCall(call.id, call.from);
                 }
-                const msg = await this.client.sendMessage(call.from, { text: settings.msgCall });
 
-                this.client.ev.emit('messages.upsert', { messages: [msg], type: 'notify' });
-              }
+                if (settings?.msgCall?.trim().length > 0 && call.status == 'offer') {
+                  if (call.from.endsWith('@lid')) {
+                    call.from = await this.client.signalRepository.lidMapping.getPNForLID(call.from as string);
+                  }
+                  const msg = await this.client.sendMessage(call.from, { text: settings.msgCall });
 
-              this.sendDataWebhook(Events.CALL, call);
+                  this.client.ev.emit('messages.upsert', { messages: [msg], type: 'notify' });
+                }
+
+                this.sendDataWebhook(Events.CALL, call);
+              });
             }
 
             if (events['connection.update']) {
-              this.connectionUpdate(events['connection.update']);
+              await this.runEventStep('connection.update', async () => {
+                this.connectionUpdate(events['connection.update']);
+              });
             }
 
             if (events['creds.update']) {
-              this.instance.authState.saveCreds();
+              await this.runEventStep('creds.update', async () => {
+                this.instance.authState.saveCreds();
+              });
             }
 
             if (events['messaging-history.set']) {
-              const payload = events['messaging-history.set'];
-              await this.messageHandle['messaging-history.set'](payload);
+              await this.runEventStep('messaging-history.set', async () => {
+                const payload = events['messaging-history.set'];
+                await this.messageHandle['messaging-history.set'](payload);
+              });
             }
 
             if (events['lid-mapping.update']) {
-              const { lid, pn } = events['lid-mapping.update'];
-              this.scheduleLidRemoteJidAltBackfill(lid, pn);
+              await this.runEventStep('lid-mapping.update', async () => {
+                const { lid, pn } = events['lid-mapping.update'];
+                this.scheduleLidRemoteJidAltBackfill(lid, pn);
+              });
             }
 
             if (events['messages.upsert']) {
-              const payload = events['messages.upsert'];
+              await this.runEventStep('messages.upsert', async () => {
+                const payload = events['messages.upsert'];
 
-              // this.messageProcessor.processMessage(payload, settings);
-              await this.messageHandle['messages.upsert'](payload, settings);
+                // this.messageProcessor.processMessage(payload, settings);
+                await this.messageHandle['messages.upsert'](payload, settings);
+              });
             }
 
             if (events['messages.update']) {
-              const payload = events['messages.update'];
-              await this.messageHandle['messages.update'](payload, settings);
+              await this.runEventStep('messages.update', async () => {
+                const payload = events['messages.update'];
+                await this.messageHandle['messages.update'](payload, settings);
+              });
             }
 
             if (events['message-receipt.update']) {
-              const payload = events['message-receipt.update'] as MessageUserReceiptUpdate[];
-              const remotesJidMap: Record<string, number> = {};
+              await this.runEventStep('message-receipt.update', async () => {
+                const payload = events['message-receipt.update'] as MessageUserReceiptUpdate[];
+                const remotesJidMap: Record<string, number> = {};
 
-              for (const event of payload) {
-                if (typeof event.key.remoteJid === 'string' && typeof event.receipt.readTimestamp === 'number') {
-                  remotesJidMap[event.key.remoteJid] = event.receipt.readTimestamp;
+                for (const event of payload) {
+                  if (typeof event.key.remoteJid === 'string' && typeof event.receipt.readTimestamp === 'number') {
+                    remotesJidMap[event.key.remoteJid] = event.receipt.readTimestamp;
+                  }
                 }
-              }
 
-              await Promise.all(
-                Object.keys(remotesJidMap).map(async (remoteJid) =>
-                  this.updateMessagesReadedByTimestamp(remoteJid, remotesJidMap[remoteJid]),
-                ),
-              );
+                await Promise.all(
+                  Object.keys(remotesJidMap).map(async (remoteJid) =>
+                    this.updateMessagesReadedByTimestamp(remoteJid, remotesJidMap[remoteJid]),
+                  ),
+                );
+              });
             }
 
             if (events['presence.update']) {
-              const payload = events['presence.update'];
+              await this.runEventStep('presence.update', async () => {
+                const payload = events['presence.update'];
 
-              if (settings?.groupsIgnore && payload.id.includes('@g.us')) {
-                return;
-              }
+                const isIgnoredGroupPresence = settings?.groupsIgnore && payload.id.includes('@g.us');
 
-              this.sendDataWebhook(Events.PRESENCE_UPDATE, payload);
+                if (!isIgnoredGroupPresence) {
+                  this.sendDataWebhook(Events.PRESENCE_UPDATE, payload);
+                }
+              });
             }
 
             if (!settings?.groupsIgnore) {
               if (events['groups.upsert']) {
-                const payload = events['groups.upsert'];
-                this.groupHandler['groups.upsert'](payload);
+                await this.runEventStep('groups.upsert', async () => {
+                  const payload = events['groups.upsert'];
+                  this.groupHandler['groups.upsert'](payload);
+                });
               }
 
               if (events['groups.update']) {
-                const payload = events['groups.update'];
-                this.groupHandler['groups.update'](payload);
+                await this.runEventStep('groups.update', async () => {
+                  const payload = events['groups.update'];
+                  this.groupHandler['groups.update'](payload);
+                });
               }
 
               if (events['group-participants.update']) {
-                const payload = events['group-participants.update'] as any;
-                this.groupHandler['group-participants.update'](payload);
+                await this.runEventStep('group-participants.update', async () => {
+                  const payload = events['group-participants.update'] as any;
+                  this.groupHandler['group-participants.update'](payload);
+                });
               }
             }
 
             if (events['chats.upsert']) {
-              const payload = events['chats.upsert'];
-              this.chatHandle['chats.upsert'](payload);
+              await this.runEventStep('chats.upsert', async () => {
+                const payload = events['chats.upsert'];
+                this.chatHandle['chats.upsert'](payload);
+              });
             }
 
             if (events['chats.update']) {
-              const payload = events['chats.update'];
-              this.chatHandle['chats.update'](payload);
+              await this.runEventStep('chats.update', async () => {
+                const payload = events['chats.update'];
+                this.chatHandle['chats.update'](payload);
+              });
             }
 
             if (events['chats.delete']) {
-              const payload = events['chats.delete'];
-              this.chatHandle['chats.delete'](payload);
+              await this.runEventStep('chats.delete', async () => {
+                const payload = events['chats.delete'];
+                this.chatHandle['chats.delete'](payload);
+              });
             }
 
             if (events['contacts.upsert']) {
-              const payload = events['contacts.upsert'];
-              this.contactHandle['contacts.upsert'](payload);
+              await this.runEventStep('contacts.upsert', async () => {
+                const payload = events['contacts.upsert'];
+                this.contactHandle['contacts.upsert'](payload);
+              });
             }
 
             if (events['contacts.update']) {
-              const payload = events['contacts.update'];
-              this.contactHandle['contacts.update'](payload);
+              await this.runEventStep('contacts.update', async () => {
+                const payload = events['contacts.update'];
+                this.contactHandle['contacts.update'](payload);
+              });
             }
 
             if (events[Events.LABELS_ASSOCIATION]) {
-              const payload = events[Events.LABELS_ASSOCIATION];
-              this.labelHandle[Events.LABELS_ASSOCIATION](payload, database);
-              return;
+              await this.runEventStep(Events.LABELS_ASSOCIATION, async () => {
+                const payload = events[Events.LABELS_ASSOCIATION];
+                this.labelHandle[Events.LABELS_ASSOCIATION](payload, database);
+              });
             }
 
             if (events[Events.LABELS_EDIT]) {
-              const payload = events[Events.LABELS_EDIT];
-              this.labelHandle[Events.LABELS_EDIT](payload);
-              return;
+              await this.runEventStep(Events.LABELS_EDIT, async () => {
+                const payload = events[Events.LABELS_EDIT];
+                this.labelHandle[Events.LABELS_EDIT](payload);
+              });
             }
           }
         } catch (error) {
