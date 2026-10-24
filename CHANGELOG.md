@@ -1,5 +1,11 @@
 # evolution-in-purple
 
+## Unreleased
+
+### Fixes
+
+* **Sent message status**: messages sent by the instance now advance `Message.status` from WhatsApp acks instead of staying `PENDING`, so `findChats` `lastMessageStatus` and `findMessages` reflect the real status. Applies to 1:1 chats; Baileys delivers no per-message status for groups. Backward acks are ignored and `DELETED`/`EDITED` are never overwritten
+
 ## 0.1.3 (2026-10-24)
 
 ### Security
