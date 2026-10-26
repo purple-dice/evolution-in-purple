@@ -3889,27 +3889,23 @@ export class BaileysStartupService extends ChannelStartupService {
   }
 
   public async getLastMessage(number: string) {
-    const where: any = { key: { remoteJid: number }, instanceId: this.instance.id };
+    const lastMessage = await this.findLastMessageOrNone(number);
 
+    if (!lastMessage) {
+      throw new NotFoundException('Messages not found');
+    }
+
+    return lastMessage;
+  }
+
+  private async findLastMessageOrNone(number: string): Promise<LastMessage | undefined> {
     const messages = await this.prismaRepository.message.findMany({
-      where,
+      where: { key: { path: ['remoteJid'], equals: createJid(number) }, instanceId: this.instance.id },
       orderBy: { messageTimestamp: 'desc' },
       take: 1,
     });
 
-    if (messages.length === 0) {
-      throw new NotFoundException('Messages not found');
-    }
-
-    let lastMessage = messages.pop();
-
-    for (const message of messages) {
-      if (message.messageTimestamp >= lastMessage.messageTimestamp) {
-        lastMessage = message;
-      }
-    }
-
-    return lastMessage as unknown as LastMessage;
+    return messages[0] as unknown as LastMessage | undefined;
   }
 
   public async archiveChat(data: ArchiveChatDto) {
@@ -3918,18 +3914,16 @@ export class BaileysStartupService extends ChannelStartupService {
       let number = data.chat;
 
       if (!last_message && number) {
-        last_message = await this.getLastMessage(number);
+        last_message = await this.findLastMessageOrNone(number);
       } else {
         last_message = data.lastMessage;
-        last_message.messageTimestamp = last_message?.messageTimestamp ?? Date.now();
+        last_message.messageTimestamp = last_message?.messageTimestamp ?? Math.floor(Date.now() / 1000);
         number = last_message?.key?.remoteJid;
       }
 
-      if (!last_message || Object.keys(last_message).length === 0) {
-        throw new NotFoundException('Last message not found');
-      }
+      const lastMessages = last_message && Object.keys(last_message).length > 0 ? [last_message] : [];
 
-      await this.client.chatModify({ archive: data.archive, lastMessages: [last_message] }, createJid(number));
+      await this.client.chatModify({ archive: data.archive, lastMessages }, createJid(number));
 
       return { chatId: number, archived: true };
     } catch (error) {
@@ -3949,7 +3943,7 @@ export class BaileysStartupService extends ChannelStartupService {
         last_message = await this.getLastMessage(number);
       } else {
         last_message = data.lastMessage;
-        last_message.messageTimestamp = last_message?.messageTimestamp ?? Date.now();
+        last_message.messageTimestamp = last_message?.messageTimestamp ?? Math.floor(Date.now() / 1000);
         number = last_message?.key?.remoteJid;
       }
 
