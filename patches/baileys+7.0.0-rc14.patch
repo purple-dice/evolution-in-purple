@@ -1,5 +1,5 @@
 diff --git a/node_modules/baileys/lib/Socket/messages-recv.js b/node_modules/baileys/lib/Socket/messages-recv.js
-index f2003ac..1f72102 100644
+index f2003ac..c649415 100644
 --- a/node_modules/baileys/lib/Socket/messages-recv.js
 +++ b/node_modules/baileys/lib/Socket/messages-recv.js
 @@ -880,6 +880,7 @@ export const makeMessagesRecvSocket = (config) => {
@@ -10,6 +10,44 @@ index f2003ac..1f72102 100644
                  const ref = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_ref'));
                  const primaryIdentityPublicKey = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'primary_identity_pub'));
                  const primaryEphemeralPublicKeyWrapped = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_wrapped_primary_ephemeral_pub'));
+@@ -1576,11 +1577,25 @@ export const makeMessagesRecvSocket = (config) => {
+             return exec(node, false).catch(err => onUnexpectedError(err, identifier));
+         }
+     };
++    // Contacts' statuses can arrive as a top-level <status> stanza instead of
++    // <message from="status@broadcast">. It isn't decoded here, but it must be acked:
++    // otherwise the server ends the stream ~50 minutes later with
++    // <stream:error><ack class="status"/></stream:error> and redelivers it on reconnect.
++    // Backport of WhiskeySockets/Baileys#2883 (issue #2858).
++    const handleStatus = async (node) => {
++        try {
++            await sendMessageAck(node);
++        }
++        catch (error) {
++            onUnexpectedError(error, 'acking status stanza');
++        }
++    };
+     const offlineNodeProcessor = makeOfflineNodeProcessor(new Map([
+         ['message', handleMessage],
+         ['call', handleCall],
+         ['receipt', handleReceipt],
+-        ['notification', handleNotification]
++        ['notification', handleNotification],
++        ['status', handleStatus]
+     ]), {
+         isWsOpen: () => ws.isOpen,
+         onUnexpectedError,
+@@ -1621,6 +1636,10 @@ export const makeMessagesRecvSocket = (config) => {
+     ws.on('CB:notification', async (node) => {
+         await processNode('notification', node, 'handling notification', handleNotification);
+     });
++    ws.on('CB:status', async (node) => {
++        // processNode acks ignored JIDs itself, outside handleStatus' try/catch
++        await processNode('status', node, 'acking status stanza', handleStatus).catch(error => onUnexpectedError(error, 'acking status stanza'));
++    });
+     ws.on('CB:ack,class:message', (node) => {
+         handleBadAck(node).catch(error => onUnexpectedError(error, 'handling bad ack'));
+     });
 diff --git a/node_modules/baileys/lib/Socket/socket.js b/node_modules/baileys/lib/Socket/socket.js
 index ae34a8f..9e6a580 100644
 --- a/node_modules/baileys/lib/Socket/socket.js
