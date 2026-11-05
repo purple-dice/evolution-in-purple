@@ -1,5 +1,11 @@
 # evolution-in-purple
 
+## 0.1.5 (2026-11-05)
+
+### Fixes
+
+* **Status stanzas acked**: top-level `<status>` stanzas (contacts' Status updates, which WhatsApp now delivers instead of `<message from="status@broadcast">`) are now acked with class `status`. Before, Baileys left them unhandled, so the server ended the stream about 50 minutes later with `Stream Errored (ack)` and redelivered the pending statuses first on every reconnect, leaving instances that receive many statuses hours behind on real messages. No QR rescan is needed (Baileys patch; backport of WhiskeySockets/Baileys#2883, issue #2858)
+
 ## 0.1.4 (2026-11-05)
 
 ### Fixes
